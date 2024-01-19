@@ -29,11 +29,9 @@ jobs:
 
       - name: Execute unit tests
         run: dotnet test
-        working-directory: src
 
       - name: Pack
         run: dotnet pack -c Release
-        working-directory: src
 
       - uses: nuget/setup-nuget@v1
         name: Setup NuGet

@@ -1,6 +1,6 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MentorLake.Redux", "MentorLake.Redux\MentorLake.Redux.csproj", "{1E33B52B-2178-40A8-BB71-9EDE01960F31}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MentorLake.Redux", "src\MentorLake.Redux\MentorLake.Redux.csproj", "{1E33B52B-2178-40A8-BB71-9EDE01960F31}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
