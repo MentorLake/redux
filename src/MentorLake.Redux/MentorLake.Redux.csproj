@@ -1,17 +1,29 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-		<PropertyGroup>
-			<TargetFramework>net8.0</TargetFramework>
-			<ImplicitUsings>enable</ImplicitUsings>
-			<PackageId>MentorLake.Redux</PackageId>
-			<Authors>MentorLake</Authors>
-			<Company>MentorLake</Company>
-			<PackageDescription>Redux library</PackageDescription>
-			<RepositoryUrl>https://github.com/MentorLake/redux.git</RepositoryUrl>
-		</PropertyGroup>
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<PackageId>MentorLake.Redux</PackageId>
+		<Authors>MentorLake</Authors>
+		<Company>MentorLake</Company>
+		<PackageDescription>Redux library</PackageDescription>
+		<RepositoryUrl>https://github.com/MentorLake/redux.git</RepositoryUrl>
+		<PackageProjectUrl>https://github.com/MentorLake/redux.git</PackageProjectUrl>
+		<RepositoryType>git</RepositoryType>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<PackageLicenseFile>LICENSE.md</PackageLicenseFile>
+		<PackageTags>system.reactive;redux;functional</PackageTags>
+		<Copyright>Copyright (c) 2023-$([System.DateTime]::Now.ToString(yyyy)) MentorLake</Copyright>
+		<PackageLicenseExpression>MIT</PackageLicenseExpression>
+	</PropertyGroup>
 
-		<ItemGroup>
-			<PackageReference Include="System.Reactive" Version="6.0.0"/>
-		</ItemGroup>
+	<ItemGroup>
+		<None Include="..\..\README.md" Pack="true" PackagePath="\"/>
+		<None Include="..\..\LICENSE.md" Pack="true" PackagePath="\"/>
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="System.Reactive" Version="6.0.0"/>
+	</ItemGroup>
 
 </Project>
