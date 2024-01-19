@@ -34,7 +34,7 @@ jobs:
         run: dotnet test
 
       - name: Pack
-        run: dotnet pack -c Release
+        run: dotnet pack -c Release -p:Version=${{ steps.nbgv.outputs.SemVer2 }}
 
       - uses: nuget/setup-nuget@v1
         name: Setup NuGet
