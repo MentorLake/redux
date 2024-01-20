@@ -71,6 +71,11 @@ public sealed class ReduxStore
 		return _actionDispatcher.OfType<T>();
 	}
 
+	public void RegisterEffects(params IEffectsFactory[] factories)
+	{
+		RegisterEffects(factories.SelectMany(f => f.Create()).ToArray());
+	}
+
 	public void RegisterEffects(params Effect[] effects)
 	{
 		effects

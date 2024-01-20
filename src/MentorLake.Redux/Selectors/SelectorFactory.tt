@@ -2,14 +2,14 @@
 <#@ output extension=".cs" #>
 <#@ import namespace="System" #>
 
-namespace Glimpse.Extensions.Redux.Selectors;
+namespace MentorLake.Redux.Selectors;
 
 public static class SelectorFactory
 {
-	public static ISelector<TFinalResult> CreateFeatureSelector<TFinalResult>() where TFinalResult : class =>
+	public static ISelector<TFinalResult> CreateFeature<TFinalResult>() where TFinalResult : class =>
 		new SimpleSelector<TFinalResult>(s => s.GetFeatureState<TFinalResult>());
 
-	public static ISelector<TFinalResult> CreateSelector<TFinalResult>(
+	public static ISelector<TFinalResult> Create<TFinalResult>(
 		Func<StoreState, TFinalResult> projectorFunction,
 		IEqualityComparer<TFinalResult> equalityComparer = null) =>
 			new SimpleSelector<TFinalResult>(projectorFunction, equalityComparer);
@@ -18,25 +18,25 @@ public static class SelectorFactory
 	{
 #>
 
-	public static ISelector<TResult> CreateSelector<<#=Repeat(i, "S{i}")#>,TResult>(
+	public static ISelector<TResult> Create<<#=Repeat(i, "S{i}")#>,TResult>(
 		<#=Repeat(i, "ISelector<S{i}> s{i}")#>,
 		Func<Cache<TResult>,<#=Repeat(i, "S{i}")#>,TResult> proj,
 		IEqualityComparer<TResult> equalityComparer = null) =>
 			 new MemoizedSelector<<#=Repeat(i, "S{i}")#>,TResult>(<#=Repeat(i, "s{i}")#>,proj,equalityComparer);
 
-	public static ISelector<TResult> CreateSelector<<#=Repeat(i, "S{i}")#>,TResult>(
+	public static ISelector<TResult> Create<<#=Repeat(i, "S{i}")#>,TResult>(
 		<#=Repeat(i, "ISelector<S{i}> s{i}")#>,
 		Func<Cache<TResult>,<#=Repeat(i, "S{i}")#>,TResult> proj,
 		Func<TResult,TResult,bool> equalityComparer) =>
 			 new MemoizedSelector<<#=Repeat(i, "S{i}")#>,TResult>(<#=Repeat(i, "s{i}")#>,proj,EqualityComparer<TResult>.Create(equalityComparer));
 
-	public static ISelector<TResult> CreateSelector<<#=Repeat(i, "S{i}")#>,TResult>(
+	public static ISelector<TResult> Create<<#=Repeat(i, "S{i}")#>,TResult>(
 		<#=Repeat(i, "ISelector<S{i}> s{i}")#>,
 		Func<<#=Repeat(i, "S{i}")#>,TResult> proj,
 		IEqualityComparer<TResult> equalityComparer = null) =>
 			 new MemoizedSelector<<#=Repeat(i, "S{i}")#>,TResult>(<#=Repeat(i, "s{i}")#>,(_,<#=Repeat(i, "x{i}")#>) => proj(<#=Repeat(i, "x{i}")#>),equalityComparer);
 
-	public static ISelector<TResult> CreateSelector<<#=Repeat(i, "S{i}")#>,TResult>(
+	public static ISelector<TResult> Create<<#=Repeat(i, "S{i}")#>,TResult>(
 		<#=Repeat(i, "ISelector<S{i}> s{i}")#>,
 		Func<<#=Repeat(i, "S{i}")#>,TResult> proj,
 		Func<TResult,TResult,bool> equalityComparer) =>

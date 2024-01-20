@@ -4,7 +4,7 @@
 <#@ import namespace="System.Collections.Generic" #>
 using System.Reactive.Linq;
 
-namespace Glimpse.Extensions.Redux.Selectors;
+namespace MentorLake.Redux.Selectors;
 
 <#for (var i = 1; i <= 7; i++) {#>
 public sealed class MemoizedSelector<<#=Repeat(i, "S{i}")#>,TOutput> : ISelector<TOutput>
