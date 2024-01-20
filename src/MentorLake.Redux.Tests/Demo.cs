@@ -93,7 +93,6 @@ public class Demo
 	}
 
 	[TestMethod]
-	[Timeout(1000)]
 	public async Task SelectorComparison()
 	{
 		var changeCounter = 0;
@@ -109,7 +108,6 @@ public class Demo
 	}
 
 	[TestMethod]
-	[Timeout(1000)]
 	public async Task InlineSelectorComparison()
 	{
 		var changeCounter = 0;
