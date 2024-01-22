@@ -45,7 +45,7 @@ public static class EffectsFactory
 		{
 			Run = store => store
 				.ObserveAction<TAction>()
-				.CombineLatest(store.Select(selector1), store.Select(selector2))
+				.WithLatestFrom(store.Select(selector1), store.Select(selector2))
 				.Do(t => action(t.Item1, t.Item2, t.Item3))
 				.Select(_ => nullObject),
 			Config = new EffectConfig { Dispatch = false }
@@ -65,7 +65,7 @@ public static class EffectsFactory
 		{
 			Run = store => store
 				.ObserveAction<TAction>()
-				.CombineLatest(store.Select(selector1), store.Select(selector2), store.Select(selector3))
+				.WithLatestFrom(store.Select(selector1), store.Select(selector2), store.Select(selector3))
 				.Do(t => action(t.Item1, t.Item2, t.Item3, t.Item4))
 				.Select(_ => nullObject),
 			Config = new EffectConfig { Dispatch = false }
@@ -97,7 +97,7 @@ public static class EffectsFactory
 		{
 			Run = store => store
 				.ObserveAction<TAction>()
-				.CombineLatest(store.Select(selector1))
+				.WithLatestFrom(store.Select(selector1))
 				.Select(tuple => Observable.FromAsync(() => action(tuple.Item1, tuple.Item2)))
 				.Concat()
 				.Select(_ => nullObject),
@@ -117,7 +117,7 @@ public static class EffectsFactory
 		{
 			Run = store => store
 				.ObserveAction<TAction>()
-				.CombineLatest(store.Select(selector1), store.Select(selector2))
+				.WithLatestFrom(store.Select(selector1), store.Select(selector2))
 				.Select(tuple => Observable.FromAsync(() => action(tuple.Item1, tuple.Item2, tuple.Item3)))
 				.Concat()
 				.Select(_ => nullObject),
@@ -138,7 +138,7 @@ public static class EffectsFactory
 		{
 			Run = store => store
 				.ObserveAction<TAction>()
-				.CombineLatest(store.Select(selector1), store.Select(selector2), store.Select(selector3))
+				.WithLatestFrom(store.Select(selector1), store.Select(selector2), store.Select(selector3))
 				.Select(tuple => Observable.FromAsync(() => action(tuple.Item1, tuple.Item2, tuple.Item3, tuple.Item4)))
 				.Concat()
 				.Select(_ => nullObject),
@@ -194,7 +194,7 @@ public static class EffectsFactory
 		return new Effect
 		{
 			Run = store => store.ObserveAction<TAction>()
-				.CombineLatest(store.Select(selector1), store.Select(selector2))
+				.WithLatestFrom(store.Select(selector1), store.Select(selector2))
 				.SelectMany(t => f(t.Item1, t.Item2, t.Item3)),
 			Config = new EffectConfig { Dispatch = true }
 		};
@@ -209,7 +209,7 @@ public static class EffectsFactory
 		{
 			Run = store => store
 				.ObserveAction<TAction>()
-				.CombineLatest(store.Select(selector1))
+				.WithLatestFrom(store.Select(selector1))
 				.Select(s => Observable.FromAsync(() => f(s.First, s.Second)))
 				.Concat()
 				.SelectMany(x => x),
@@ -227,7 +227,7 @@ public static class EffectsFactory
 		{
 			Run = store => store
 				.ObserveAction<TAction>()
-				.CombineLatest(store.Select(selector1), store.Select(selector2))
+				.WithLatestFrom(store.Select(selector1), store.Select(selector2))
 				.Select(s => Observable.FromAsync(() => f(s.Item1, s.Item2, s.Item3)))
 				.Concat()
 				.SelectMany(x => x),
