@@ -2,6 +2,6 @@ namespace MentorLake.Redux.Effects;
 
 public class Effect
 {
-	public Func<ReduxStore, IObservable<object>> Run { get; set; }
-	public EffectConfig Config { get; set; }
+	public Func<IObservable<object>, IObservable<object>> Run { get; init; }
+	public EffectConfig Config { get; init; }
 }

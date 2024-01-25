@@ -12,63 +12,27 @@ public sealed class ReduxStore
 	private readonly Subject<object> _actionDispatcher = new();
 	private readonly List<ActionReducer<StoreState>> _reducers = new();
 	private readonly BehaviorSubject<StoreState> _stateSubject;
-	private readonly Queue<Tuple<TaskCompletionSource, object>> _actionQueue = new();
-	private readonly object _lock = new();
 
 	public ReduxStore(TaskScheduler dispatchedActionScheduler = null)
 	{
 		State = new StoreState();
 		_stateSubject = new BehaviorSubject<StoreState>(State);
 		_actionTaskScheduler = dispatchedActionScheduler ?? new ConcurrentExclusiveSchedulerPair().ExclusiveScheduler;
-		Task.Run(ProcessActionQueue);
 	}
 
 	public StoreState State { get; private set; }
+	public IObservable<object> Actions => _actionDispatcher;
 
-	public Task Dispatch(object action)
+	public async Task Dispatch(object action)
 	{
-		if (action == null) return Task.CompletedTask;
-
-		var task = new TaskCompletionSource();
-
-		lock (_lock)
-		{
-			_actionQueue.Enqueue(Tuple.Create(task, action));
-			QueueHandle.Set();
-		}
-
-		return task.Task;
+		if (action == null) return;
+		await Task.Factory.StartNew(() => ProcessActionQueue(action), CancellationToken.None, TaskCreationOptions.None, _actionTaskScheduler);
 	}
 
-	private EventWaitHandle QueueHandle { get; } = new ManualResetEvent(false);
-
-	private void ProcessActionQueue()
+	private void ProcessActionQueue(object action)
 	{
-		while (true)
-		{
-			QueueHandle.WaitOne();
-			Tuple<TaskCompletionSource, object> t = null;
-
-			lock (_lock)
-			{
-				t = _actionQueue.Dequeue();
-				if (_actionQueue.Count == 0) QueueHandle.Reset();
-			}
-
-			UpdateState(Reduce(State, t.Item2));
-			_actionDispatcher.OnNext(t.Item2);
-			t.Item1.SetResult();
-		}
-	}
-
-	public IObservable<object> ObserveAction()
-	{
-		return _actionDispatcher;
-	}
-
-	public IObservable<T> ObserveAction<T>()
-	{
-		return _actionDispatcher.OfType<T>();
+		UpdateState(Reduce(State, action));
+		_actionDispatcher.OnNext(action);
 	}
 
 	public void RegisterEffects(params IEffectsFactory[] factories)
@@ -81,10 +45,19 @@ public sealed class ReduxStore
 		effects
 			.Where(effect => effect.Run != null && effect.Config != null)
 			.Select(effect => effect.Config.Dispatch
-				? effect.Run(this).Retry()
-				: effect.Run(this).Retry().Select(_ => Observable.Empty<object>()))
+				? effect.Run(Actions).Retry()
+				: effect.Run(Actions).Retry().Select(_ => (object)null))
 			.Merge()
+			.Where(a => a != null)
 			.Subscribe(a => Dispatch(a));
+	}
+
+	public void RegisterReducers(params IReducerFactory[] reducerFactories)
+	{
+		foreach (var factory in reducerFactories)
+		{
+			RegisterReducers(factory.Create());
+		}
 	}
 
 	public void RegisterReducers(params FeatureReducerCollection[] reducerCollections)

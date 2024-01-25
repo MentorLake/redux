@@ -13,8 +13,10 @@ public record AddressState(string ZipCode);
 public record UpdateFirstNameAction(string FirstName);
 public record UpdateLastNameAction(string LastName);
 public record ZipCodeUpdatedAction(string ZipCode);
-public record SavePersonAction(PersonState Person);
+public record SavePersonWithDispatchAction(PersonState Person);
 public record SavePersonCompleteAction();
+public record SomeOtherAction();
+public record SavePersonWithoutDispatchAction(PersonState Person);
 
 public class MySelectors
 {
@@ -27,26 +29,45 @@ public class MySelectors
 
 public class PersonService
 {
-	public Task SavePerson(PersonState state)
+	public Task SavePersonAsync(PersonState state)
 	{
 		return Task.Delay(100);
 	}
+
+	public void SavePerson(PersonState state)
+	{
+
+	}
 }
-public class MyEffects(PersonService personService) : IEffectsFactory
+
+public class DispatchAsyncEffectsFactory(PersonService personService) : IEffectsFactory
 {
 	public IEnumerable<Effect> Create() => new[]
 	{
-		EffectsFactory.CreateEffect<SavePersonAction>(async action =>
-		{
-			await personService.SavePerson(action.Person);
-			return new List<object>() { new SavePersonCompleteAction() };
-		})
+		// Async effect with actions dispatched
+		EffectsFactory.Create(actions => actions
+			.OfType<SavePersonWithDispatchAction>()
+			.Select(action => Observable.FromAsync(() => personService.SavePersonAsync(action.Person)))
+			.Concat()
+			.SelectMany(_ => new object[] { new SavePersonCompleteAction(), new SomeOtherAction() }),
+			new EffectConfig() { Dispatch = true })
 	};
 }
 
-public static class MyReducers
+public class NoDispatchEffectsFactory(PersonService personService) : IEffectsFactory
 {
-	public static readonly FeatureReducerCollection Reducers =
+	public IEnumerable<Effect> Create() => new[]
+	{
+		// Vanilla effect with no dispatch
+		EffectsFactory.Create(actions => actions
+			.OfType<SavePersonWithoutDispatchAction>()
+			.Do(action => personService.SavePerson(action.Person))),
+	};
+}
+
+public class TestReducerFactory : IReducerFactory
+{
+	public FeatureReducerCollection Create() =>
 	[
 		FeatureReducer.Build(new PersonState("Hello", "World"))
 			.On<UpdateFirstNameAction>((state, action) => state with { FirstName = action.FirstName })
@@ -60,36 +81,56 @@ public static class MyReducers
 [TestClass]
 public class Demo
 {
-	[TestMethod]
-	[Timeout(1000)]
-	public async Task ReducersAndSelectors()
+	private ReduxStore _store;
+	private ServiceProvider _serviceProvider;
+
+	[TestInitialize]
+	public void Initialize()
 	{
-		var store = new ReduxStore();
-		store.RegisterReducers(MyReducers.Reducers);
-		var selectorTask =  store.Select(MySelectors.FirstName).Take(1).ToTask();
+		_serviceProvider = new ServiceCollection()
+			.AddTransient<IEffectsFactory, NoDispatchEffectsFactory>()
+			.AddTransient<IEffectsFactory, DispatchAsyncEffectsFactory>()
+			.AddTransient<IReducerFactory, TestReducerFactory>()
+			.AddTransient<PersonService>()
+			.BuildServiceProvider();
 
-		await store.Dispatch(new UpdateFirstNameAction("Bob"));
-		await selectorTask;
-
-		Assert.AreEqual("Bob", store.State.GetFeatureState<PersonState>().FirstName);
+		_store = new ReduxStore();
+		_store.RegisterReducers(_serviceProvider.GetServices<IReducerFactory>().ToArray());
+		_store.RegisterEffects(_serviceProvider.GetServices<IEffectsFactory>().ToArray());
 	}
 
 	[TestMethod]
 	[Timeout(1000)]
-	public async Task Effects()
+	public async Task ReducersAndSelectors()
 	{
-		var serviceCollection = new ServiceCollection();
-		serviceCollection.AddTransient<IEffectsFactory, MyEffects>();
-		serviceCollection.AddTransient<PersonService>();
-		var serviceProvider = serviceCollection.BuildServiceProvider();
+		var selectorTask = _store.Select(MySelectors.FirstName).Take(1).ToTask();
 
-		var store = new ReduxStore();
-		store.RegisterReducers(MyReducers.Reducers);
-		store.RegisterEffects(serviceProvider.GetServices<IEffectsFactory>().ToArray());
+		await _store.Dispatch(new UpdateFirstNameAction("Bob"));
+		await selectorTask;
 
-		var saveCompleteTask = store.ObserveAction<SavePersonCompleteAction>().Take(1).ToTask();
-		await store.Dispatch(new SavePersonAction(new PersonState("Hello", "World")));
-		await saveCompleteTask;
+		Assert.AreEqual("Bob", _store.State.GetFeatureState<PersonState>().FirstName);
+	}
+
+	[TestMethod]
+	[Timeout(1000)]
+	public async Task EffectsDispatch()
+	{
+		var dispatchedActionsTask = _store.Actions.Take(3).ToArray().ToTask();
+		await _store.Dispatch(new SavePersonWithDispatchAction(new PersonState("Hello", "World")));
+
+		var actions = await dispatchedActionsTask;
+		Assert.AreEqual(typeof(SavePersonWithDispatchAction), actions[0].GetType());
+		Assert.AreEqual(typeof(SavePersonCompleteAction), actions[1].GetType());
+		Assert.AreEqual(typeof(SomeOtherAction), actions[2].GetType());
+	}
+
+	[TestMethod]
+	public async Task EffectsNoDispatch()
+	{
+		var actionsCount = 0;
+		_store.Actions.Subscribe(_ => actionsCount++);
+		await _store.Dispatch(new SavePersonWithoutDispatchAction(new PersonState("Hello", "World")));
+		Assert.AreEqual(1, actionsCount);
 	}
 
 	[TestMethod]
@@ -97,12 +138,10 @@ public class Demo
 	{
 		var changeCounter = 0;
 		var personSelector = SelectorFactory.Create(MySelectors.Person, p => p, CompareFirstNamesOnly);
-		var store = new ReduxStore();
-		store.RegisterReducers(MyReducers.Reducers);
-		store.Select(personSelector).Take(1).Subscribe(_ => changeCounter++);
+		_store.Select(personSelector).Take(1).Subscribe(_ => changeCounter++);
 
-		await store.Dispatch(new UpdateLastNameAction("Test"));
-		await store.Dispatch(new UpdateFirstNameAction("Bob"));
+		await _store.Dispatch(new UpdateLastNameAction("Test"));
+		await _store.Dispatch(new UpdateFirstNameAction("Bob"));
 
 		Assert.AreEqual(1, changeCounter);
 	}
@@ -116,12 +155,10 @@ public class Demo
 			MySelectors.Person.WithComparer(CompareFirstNamesOnly),
 			p => p);
 
-		var store = new ReduxStore();
-		store.RegisterReducers(MyReducers.Reducers);
-		store.Select(personSelector).Take(1).Subscribe(_ => changeCounter++);
+		_store.Select(personSelector).Take(1).Subscribe(_ => changeCounter++);
 
-		await store.Dispatch(new UpdateLastNameAction("Test"));
-		await store.Dispatch(new UpdateFirstNameAction("Bob"));
+		await _store.Dispatch(new UpdateLastNameAction("Test"));
+		await _store.Dispatch(new UpdateFirstNameAction("Bob"));
 
 		Assert.AreEqual(1, changeCounter);
 	}

@@ -1,49 +1,53 @@
 ## Getting Started
 
-Create state types:
+Create state types
 ```csharp
 public record PersonState(string FirstName, string LastName);
 public record AddressState(string ZipCode);
 ```
 
-Create action types:
-
+Create action types
 ```csharp
 public record UpdateFirstNameAction(string FirstName);
 public record UpdateLastNameAction(string LastName);
 public record ZipCodeUpdatedAction(string ZipCode);
 ```
 
-Create reducers:
+Create reducers
 ```csharp
-public static class MyReducers
+public class MyReducers : IReducerFactory
 {
-	public static readonly FeatureReducerCollection Reducers =
+	public FeatureReducerCollection Create() =>
 	[
 		FeatureReducer.Build(new PersonState("Hello", "World"))
 			.On<UpdateFirstNameAction>((state, action) => state with { FirstName = action.FirstName })
 			.On<UpdateLastNameAction>((state, action) => state with { LastName = action.LastName }),
-
 		FeatureReducer.Build(new AddressState("12345"))
 			.On<ZipCodeUpdatedAction>((state, action) => state with { ZipCode = action.ZipCode })
 	];
 }
 ```
 
-Create and setup redux store:
+Create and setup redux store
 ```csharp
+var serviceProvider = new ServiceCollection()
+    .AddTransient<IReducerFactory, MyReducers>()
+    .BuildServiceProvider();
+
 var store = new ReduxStore();
-store.RegisterReducers(MyReducers.Reducers);
+store.RegisterReducers(serviceProvider.GetServices<IReducerFactory>().ToArray());
 ```
 
-Dispatch actions:
+Dispatch an action
 ```csharp
-store.Dispatch(new UpdateFirstNameAction("Bob"));
+await store.Dispatch(new UpdateFirstNameAction("Bob"));
 ```
+
+The Dispatch method returns a task that completes after the reducers and effects run.  Note, the task does not wait for asynchronous effects to complete.
 
 ## Selectors
 
-Creating selectors:
+Creating selectors
 ```csharp
 public class MySelectors
 {
@@ -55,12 +59,12 @@ public class MySelectors
 }
 ```
 
-Using a selector:
+Using a selector
 ```csharp
 store.Select(MySelectors.FirstName).Subscribe(firstName => Console.WriteLine(firstName));
 ```
 
-Custom comparison function:
+Custom comparison function
 ```csharp
 private bool CompareFirstNamesOnly(PersonState x, PersonState y)
 {
@@ -83,21 +87,28 @@ public class MyEffects(PersonService personService) : IEffectsFactory
 {
 	public IEnumerable<Effect> Create() => new[]
 	{
-		EffectsFactory.CreateEffect<SavePersonAction>(async action =>
-		{
-			await personService.SavePerson(action.Person);
-			return new List<object>() { new SavePersonCompleteAction() };
-		})
+		// Vanilla effect with no dispatch
+		EffectsFactory.Create(actions => actions
+			.OfType<SavePersonAction>()
+			.Do(action => personService.SavePerson(action.Person))),
+
+		// Async effect with actions dispatched
+		EffectsFactory.Create(actions => actions
+			.OfType<SavePersonAction>()
+			.Select(action => Observable.FromAsync(() => personService.SavePersonAsync(action.Person)))
+			.Concat()
+			.SelectMany(_ => new object[] { new SavePersonCompleteAction(), new SomeOtherAction() }),
+			new EffectConfig() { Dispatch = true })
 	};
 }
 ```
 
-It's best to register effects by resolving them from a DI container.  For example:
+Registration
 ```csharp
-var serviceCollection = new ServiceCollection();
-serviceCollection.AddTransient<IEffectsFactory, MyEffects>();
-serviceCollection.AddTransient<PersonService>();
-var serviceProvider = serviceCollection.BuildServiceProvider();
+var serviceProvider = new ServiceCollection()
+	.AddTransient<IEffectsFactory, MyEffects>()
+	.AddTransient<PersonService>()
+	.BuildServiceProvider();
 
 var store = new ReduxStore();
 store.RegisterEffects(serviceProvider.GetServices<IEffectsFactory>().ToArray());
