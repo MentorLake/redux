@@ -163,6 +163,16 @@ public class Demo
 		Assert.AreEqual(1, changeCounter);
 	}
 
+	[TestMethod]
+	public async Task EffectsValueTuple()
+	{
+		_store.RegisterEffects(EffectsFactory.Create(actions => actions.Select(_ => (1, 2))));
+
+
+		await _store.Dispatch(new UpdateLastNameAction("Test"));
+		await _store.Dispatch(new UpdateFirstNameAction("Bob"));
+	}
+
 	private bool CompareFirstNamesOnly(PersonState x, PersonState y)
 	{
 		if (ReferenceEquals(x, y)) return true;
