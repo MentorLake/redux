@@ -20,13 +20,13 @@ public static class SelectorFactory
 
 	public static ISelector<TResult> Create<<#=Repeat(i, "S{i}")#>,TResult>(
 		<#=Repeat(i, "ISelector<S{i}> s{i}")#>,
-		Func<Cache<TResult>,<#=Repeat(i, "S{i}")#>,TResult> proj,
+		Func<(Cache<TResult> Result, <#=Repeat(i, "Cache<S{i}> Input{i}")#>),<#=Repeat(i, "S{i}")#>,TResult> proj,
 		IEqualityComparer<TResult> equalityComparer = null) =>
 			 new MemoizedSelector<<#=Repeat(i, "S{i}")#>,TResult>(<#=Repeat(i, "s{i}")#>,proj,equalityComparer);
 
 	public static ISelector<TResult> Create<<#=Repeat(i, "S{i}")#>,TResult>(
 		<#=Repeat(i, "ISelector<S{i}> s{i}")#>,
-		Func<Cache<TResult>,<#=Repeat(i, "S{i}")#>,TResult> proj,
+		Func<(Cache<TResult> Result, <#=Repeat(i, "Cache<S{i}> Input{i}")#>),<#=Repeat(i, "S{i}")#>,TResult> proj,
 		Func<TResult,TResult,bool> equalityComparer) =>
 			 new MemoizedSelector<<#=Repeat(i, "S{i}")#>,TResult>(<#=Repeat(i, "s{i}")#>,proj,EqualityComparer<TResult>.Create(equalityComparer));
 
