@@ -7,14 +7,14 @@ public sealed class MemoizedSelector<S1,TOutput> : ISelector<TOutput>
 	private readonly Cache<TOutput> _cachedOutput = new();
 	public IEqualityComparer<TOutput> EqualityComparer { get; }
 	public IObservable<TOutput> Apply(IObservable<StoreState> input) => input.Select(Apply).DistinctUntilChanged();
-	public Func<(Cache<TOutput> Result,Cache<S1> Input1),S1,TOutput> ProjectorFunction { get; }
+	public Func<(TOutput Result,S1 Input1)?,S1,TOutput> ProjectorFunction { get; }
 
 	private readonly Cache<S1> _cachedSelectorResult1 = new();
 	private readonly ISelector<S1> _selector1;
 
 	public MemoizedSelector(
 		ISelector<S1> selector1,
-		Func<(Cache<TOutput> Result,Cache<S1> Input1),S1, TOutput> projectorFunction,
+		Func<(TOutput Result,S1 Input1)?,S1, TOutput> projectorFunction,
 		IEqualityComparer<TOutput> equalityComparer = null)
 	{
 		EqualityComparer = equalityComparer ?? EqualityComparer<TOutput>.Default;
@@ -31,9 +31,9 @@ public sealed class MemoizedSelector<S1,TOutput> : ISelector<TOutput>
 			return _cachedOutput.Value;
 		}
 
-		var lastRun = (
-			_cachedOutput,
-			_cachedSelectorResult1);
+		(TOutput, S1)? lastRun = _cachedOutput.HasValue
+			? (_cachedOutput.Value, _cachedSelectorResult1.Value)
+			: null;
 
 		_cachedSelectorResult1.Value = selector1Result;
 
@@ -52,7 +52,7 @@ public sealed class MemoizedSelector<S1,S2,TOutput> : ISelector<TOutput>
 	private readonly Cache<TOutput> _cachedOutput = new();
 	public IEqualityComparer<TOutput> EqualityComparer { get; }
 	public IObservable<TOutput> Apply(IObservable<StoreState> input) => input.Select(Apply).DistinctUntilChanged();
-	public Func<(Cache<TOutput> Result,Cache<S1> Input1,Cache<S2> Input2),S1,S2,TOutput> ProjectorFunction { get; }
+	public Func<(TOutput Result,S1 Input1,S2 Input2)?,S1,S2,TOutput> ProjectorFunction { get; }
 
 	private readonly Cache<S1> _cachedSelectorResult1 = new();
 	private readonly ISelector<S1> _selector1;
@@ -61,7 +61,7 @@ public sealed class MemoizedSelector<S1,S2,TOutput> : ISelector<TOutput>
 
 	public MemoizedSelector(
 		ISelector<S1> selector1, ISelector<S2> selector2,
-		Func<(Cache<TOutput> Result,Cache<S1> Input1,Cache<S2> Input2),S1,S2, TOutput> projectorFunction,
+		Func<(TOutput Result,S1 Input1,S2 Input2)?,S1,S2, TOutput> projectorFunction,
 		IEqualityComparer<TOutput> equalityComparer = null)
 	{
 		EqualityComparer = equalityComparer ?? EqualityComparer<TOutput>.Default;
@@ -80,10 +80,9 @@ public sealed class MemoizedSelector<S1,S2,TOutput> : ISelector<TOutput>
 			return _cachedOutput.Value;
 		}
 
-		var lastRun = (
-			_cachedOutput,
-			_cachedSelectorResult1,
-		_cachedSelectorResult2);
+		(TOutput, S1,S2)? lastRun = _cachedOutput.HasValue
+			? (_cachedOutput.Value, _cachedSelectorResult1.Value, _cachedSelectorResult2.Value)
+			: null;
 
 		_cachedSelectorResult1.Value = selector1Result;
 		_cachedSelectorResult2.Value = selector2Result;
@@ -103,7 +102,7 @@ public sealed class MemoizedSelector<S1,S2,S3,TOutput> : ISelector<TOutput>
 	private readonly Cache<TOutput> _cachedOutput = new();
 	public IEqualityComparer<TOutput> EqualityComparer { get; }
 	public IObservable<TOutput> Apply(IObservable<StoreState> input) => input.Select(Apply).DistinctUntilChanged();
-	public Func<(Cache<TOutput> Result,Cache<S1> Input1,Cache<S2> Input2,Cache<S3> Input3),S1,S2,S3,TOutput> ProjectorFunction { get; }
+	public Func<(TOutput Result,S1 Input1,S2 Input2,S3 Input3)?,S1,S2,S3,TOutput> ProjectorFunction { get; }
 
 	private readonly Cache<S1> _cachedSelectorResult1 = new();
 	private readonly ISelector<S1> _selector1;
@@ -114,7 +113,7 @@ public sealed class MemoizedSelector<S1,S2,S3,TOutput> : ISelector<TOutput>
 
 	public MemoizedSelector(
 		ISelector<S1> selector1, ISelector<S2> selector2, ISelector<S3> selector3,
-		Func<(Cache<TOutput> Result,Cache<S1> Input1,Cache<S2> Input2,Cache<S3> Input3),S1,S2,S3, TOutput> projectorFunction,
+		Func<(TOutput Result,S1 Input1,S2 Input2,S3 Input3)?,S1,S2,S3, TOutput> projectorFunction,
 		IEqualityComparer<TOutput> equalityComparer = null)
 	{
 		EqualityComparer = equalityComparer ?? EqualityComparer<TOutput>.Default;
@@ -135,11 +134,9 @@ public sealed class MemoizedSelector<S1,S2,S3,TOutput> : ISelector<TOutput>
 			return _cachedOutput.Value;
 		}
 
-		var lastRun = (
-			_cachedOutput,
-			_cachedSelectorResult1,
-		_cachedSelectorResult2,
-		_cachedSelectorResult3);
+		(TOutput, S1,S2,S3)? lastRun = _cachedOutput.HasValue
+			? (_cachedOutput.Value, _cachedSelectorResult1.Value, _cachedSelectorResult2.Value, _cachedSelectorResult3.Value)
+			: null;
 
 		_cachedSelectorResult1.Value = selector1Result;
 		_cachedSelectorResult2.Value = selector2Result;
@@ -160,7 +157,7 @@ public sealed class MemoizedSelector<S1,S2,S3,S4,TOutput> : ISelector<TOutput>
 	private readonly Cache<TOutput> _cachedOutput = new();
 	public IEqualityComparer<TOutput> EqualityComparer { get; }
 	public IObservable<TOutput> Apply(IObservable<StoreState> input) => input.Select(Apply).DistinctUntilChanged();
-	public Func<(Cache<TOutput> Result,Cache<S1> Input1,Cache<S2> Input2,Cache<S3> Input3,Cache<S4> Input4),S1,S2,S3,S4,TOutput> ProjectorFunction { get; }
+	public Func<(TOutput Result,S1 Input1,S2 Input2,S3 Input3,S4 Input4)?,S1,S2,S3,S4,TOutput> ProjectorFunction { get; }
 
 	private readonly Cache<S1> _cachedSelectorResult1 = new();
 	private readonly ISelector<S1> _selector1;
@@ -173,7 +170,7 @@ public sealed class MemoizedSelector<S1,S2,S3,S4,TOutput> : ISelector<TOutput>
 
 	public MemoizedSelector(
 		ISelector<S1> selector1, ISelector<S2> selector2, ISelector<S3> selector3, ISelector<S4> selector4,
-		Func<(Cache<TOutput> Result,Cache<S1> Input1,Cache<S2> Input2,Cache<S3> Input3,Cache<S4> Input4),S1,S2,S3,S4, TOutput> projectorFunction,
+		Func<(TOutput Result,S1 Input1,S2 Input2,S3 Input3,S4 Input4)?,S1,S2,S3,S4, TOutput> projectorFunction,
 		IEqualityComparer<TOutput> equalityComparer = null)
 	{
 		EqualityComparer = equalityComparer ?? EqualityComparer<TOutput>.Default;
@@ -196,12 +193,9 @@ public sealed class MemoizedSelector<S1,S2,S3,S4,TOutput> : ISelector<TOutput>
 			return _cachedOutput.Value;
 		}
 
-		var lastRun = (
-			_cachedOutput,
-			_cachedSelectorResult1,
-		_cachedSelectorResult2,
-		_cachedSelectorResult3,
-		_cachedSelectorResult4);
+		(TOutput, S1,S2,S3,S4)? lastRun = _cachedOutput.HasValue
+			? (_cachedOutput.Value, _cachedSelectorResult1.Value, _cachedSelectorResult2.Value, _cachedSelectorResult3.Value, _cachedSelectorResult4.Value)
+			: null;
 
 		_cachedSelectorResult1.Value = selector1Result;
 		_cachedSelectorResult2.Value = selector2Result;
@@ -223,7 +217,7 @@ public sealed class MemoizedSelector<S1,S2,S3,S4,S5,TOutput> : ISelector<TOutput
 	private readonly Cache<TOutput> _cachedOutput = new();
 	public IEqualityComparer<TOutput> EqualityComparer { get; }
 	public IObservable<TOutput> Apply(IObservable<StoreState> input) => input.Select(Apply).DistinctUntilChanged();
-	public Func<(Cache<TOutput> Result,Cache<S1> Input1,Cache<S2> Input2,Cache<S3> Input3,Cache<S4> Input4,Cache<S5> Input5),S1,S2,S3,S4,S5,TOutput> ProjectorFunction { get; }
+	public Func<(TOutput Result,S1 Input1,S2 Input2,S3 Input3,S4 Input4,S5 Input5)?,S1,S2,S3,S4,S5,TOutput> ProjectorFunction { get; }
 
 	private readonly Cache<S1> _cachedSelectorResult1 = new();
 	private readonly ISelector<S1> _selector1;
@@ -238,7 +232,7 @@ public sealed class MemoizedSelector<S1,S2,S3,S4,S5,TOutput> : ISelector<TOutput
 
 	public MemoizedSelector(
 		ISelector<S1> selector1, ISelector<S2> selector2, ISelector<S3> selector3, ISelector<S4> selector4, ISelector<S5> selector5,
-		Func<(Cache<TOutput> Result,Cache<S1> Input1,Cache<S2> Input2,Cache<S3> Input3,Cache<S4> Input4,Cache<S5> Input5),S1,S2,S3,S4,S5, TOutput> projectorFunction,
+		Func<(TOutput Result,S1 Input1,S2 Input2,S3 Input3,S4 Input4,S5 Input5)?,S1,S2,S3,S4,S5, TOutput> projectorFunction,
 		IEqualityComparer<TOutput> equalityComparer = null)
 	{
 		EqualityComparer = equalityComparer ?? EqualityComparer<TOutput>.Default;
@@ -263,13 +257,9 @@ public sealed class MemoizedSelector<S1,S2,S3,S4,S5,TOutput> : ISelector<TOutput
 			return _cachedOutput.Value;
 		}
 
-		var lastRun = (
-			_cachedOutput,
-			_cachedSelectorResult1,
-		_cachedSelectorResult2,
-		_cachedSelectorResult3,
-		_cachedSelectorResult4,
-		_cachedSelectorResult5);
+		(TOutput, S1,S2,S3,S4,S5)? lastRun = _cachedOutput.HasValue
+			? (_cachedOutput.Value, _cachedSelectorResult1.Value, _cachedSelectorResult2.Value, _cachedSelectorResult3.Value, _cachedSelectorResult4.Value, _cachedSelectorResult5.Value)
+			: null;
 
 		_cachedSelectorResult1.Value = selector1Result;
 		_cachedSelectorResult2.Value = selector2Result;
@@ -292,7 +282,7 @@ public sealed class MemoizedSelector<S1,S2,S3,S4,S5,S6,TOutput> : ISelector<TOut
 	private readonly Cache<TOutput> _cachedOutput = new();
 	public IEqualityComparer<TOutput> EqualityComparer { get; }
 	public IObservable<TOutput> Apply(IObservable<StoreState> input) => input.Select(Apply).DistinctUntilChanged();
-	public Func<(Cache<TOutput> Result,Cache<S1> Input1,Cache<S2> Input2,Cache<S3> Input3,Cache<S4> Input4,Cache<S5> Input5,Cache<S6> Input6),S1,S2,S3,S4,S5,S6,TOutput> ProjectorFunction { get; }
+	public Func<(TOutput Result,S1 Input1,S2 Input2,S3 Input3,S4 Input4,S5 Input5,S6 Input6)?,S1,S2,S3,S4,S5,S6,TOutput> ProjectorFunction { get; }
 
 	private readonly Cache<S1> _cachedSelectorResult1 = new();
 	private readonly ISelector<S1> _selector1;
@@ -309,7 +299,7 @@ public sealed class MemoizedSelector<S1,S2,S3,S4,S5,S6,TOutput> : ISelector<TOut
 
 	public MemoizedSelector(
 		ISelector<S1> selector1, ISelector<S2> selector2, ISelector<S3> selector3, ISelector<S4> selector4, ISelector<S5> selector5, ISelector<S6> selector6,
-		Func<(Cache<TOutput> Result,Cache<S1> Input1,Cache<S2> Input2,Cache<S3> Input3,Cache<S4> Input4,Cache<S5> Input5,Cache<S6> Input6),S1,S2,S3,S4,S5,S6, TOutput> projectorFunction,
+		Func<(TOutput Result,S1 Input1,S2 Input2,S3 Input3,S4 Input4,S5 Input5,S6 Input6)?,S1,S2,S3,S4,S5,S6, TOutput> projectorFunction,
 		IEqualityComparer<TOutput> equalityComparer = null)
 	{
 		EqualityComparer = equalityComparer ?? EqualityComparer<TOutput>.Default;
@@ -336,14 +326,9 @@ public sealed class MemoizedSelector<S1,S2,S3,S4,S5,S6,TOutput> : ISelector<TOut
 			return _cachedOutput.Value;
 		}
 
-		var lastRun = (
-			_cachedOutput,
-			_cachedSelectorResult1,
-		_cachedSelectorResult2,
-		_cachedSelectorResult3,
-		_cachedSelectorResult4,
-		_cachedSelectorResult5,
-		_cachedSelectorResult6);
+		(TOutput, S1,S2,S3,S4,S5,S6)? lastRun = _cachedOutput.HasValue
+			? (_cachedOutput.Value, _cachedSelectorResult1.Value, _cachedSelectorResult2.Value, _cachedSelectorResult3.Value, _cachedSelectorResult4.Value, _cachedSelectorResult5.Value, _cachedSelectorResult6.Value)
+			: null;
 
 		_cachedSelectorResult1.Value = selector1Result;
 		_cachedSelectorResult2.Value = selector2Result;
@@ -367,7 +352,7 @@ public sealed class MemoizedSelector<S1,S2,S3,S4,S5,S6,S7,TOutput> : ISelector<T
 	private readonly Cache<TOutput> _cachedOutput = new();
 	public IEqualityComparer<TOutput> EqualityComparer { get; }
 	public IObservable<TOutput> Apply(IObservable<StoreState> input) => input.Select(Apply).DistinctUntilChanged();
-	public Func<(Cache<TOutput> Result,Cache<S1> Input1,Cache<S2> Input2,Cache<S3> Input3,Cache<S4> Input4,Cache<S5> Input5,Cache<S6> Input6,Cache<S7> Input7),S1,S2,S3,S4,S5,S6,S7,TOutput> ProjectorFunction { get; }
+	public Func<(TOutput Result,S1 Input1,S2 Input2,S3 Input3,S4 Input4,S5 Input5,S6 Input6,S7 Input7)?,S1,S2,S3,S4,S5,S6,S7,TOutput> ProjectorFunction { get; }
 
 	private readonly Cache<S1> _cachedSelectorResult1 = new();
 	private readonly ISelector<S1> _selector1;
@@ -386,7 +371,7 @@ public sealed class MemoizedSelector<S1,S2,S3,S4,S5,S6,S7,TOutput> : ISelector<T
 
 	public MemoizedSelector(
 		ISelector<S1> selector1, ISelector<S2> selector2, ISelector<S3> selector3, ISelector<S4> selector4, ISelector<S5> selector5, ISelector<S6> selector6, ISelector<S7> selector7,
-		Func<(Cache<TOutput> Result,Cache<S1> Input1,Cache<S2> Input2,Cache<S3> Input3,Cache<S4> Input4,Cache<S5> Input5,Cache<S6> Input6,Cache<S7> Input7),S1,S2,S3,S4,S5,S6,S7, TOutput> projectorFunction,
+		Func<(TOutput Result,S1 Input1,S2 Input2,S3 Input3,S4 Input4,S5 Input5,S6 Input6,S7 Input7)?,S1,S2,S3,S4,S5,S6,S7, TOutput> projectorFunction,
 		IEqualityComparer<TOutput> equalityComparer = null)
 	{
 		EqualityComparer = equalityComparer ?? EqualityComparer<TOutput>.Default;
@@ -415,15 +400,9 @@ public sealed class MemoizedSelector<S1,S2,S3,S4,S5,S6,S7,TOutput> : ISelector<T
 			return _cachedOutput.Value;
 		}
 
-		var lastRun = (
-			_cachedOutput,
-			_cachedSelectorResult1,
-		_cachedSelectorResult2,
-		_cachedSelectorResult3,
-		_cachedSelectorResult4,
-		_cachedSelectorResult5,
-		_cachedSelectorResult6,
-		_cachedSelectorResult7);
+		(TOutput, S1,S2,S3,S4,S5,S6,S7)? lastRun = _cachedOutput.HasValue
+			? (_cachedOutput.Value, _cachedSelectorResult1.Value, _cachedSelectorResult2.Value, _cachedSelectorResult3.Value, _cachedSelectorResult4.Value, _cachedSelectorResult5.Value, _cachedSelectorResult6.Value, _cachedSelectorResult7.Value)
+			: null;
 
 		_cachedSelectorResult1.Value = selector1Result;
 		_cachedSelectorResult2.Value = selector2Result;
