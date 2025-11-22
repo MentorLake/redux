@@ -103,7 +103,67 @@ public class MyEffects(PersonService personService) : IEffectsFactory
 }
 ```
 
-Registration
+## Thunks
+#### Creation
+
+```csharp
+public static class MyThunks
+{
+	// Action class needed to differentiate pending, fulfilled, and rejected actions from other thunks.
+	public class ThunkOneActions;
+
+	// Async thunk with no return value
+	public static ThunkInstance<ThunkOneActions> TestThunkOne(int i)
+	{
+		return new(async (api) => { await Task.Delay(i); });
+	}
+
+	public class ThunkTwoActions;
+
+	// Async thunk with return value
+	public static ThunkInstance<ThunkTwoActions, string> TestThunkTwo(string result)
+	{
+		return new(async api => { await Task.Delay(500); return result; });
+	}
+
+	public class ThunkThreeActions
+	{
+		public record MyAction();
+	}
+
+	// Custom actions
+	public static ThunkInstance<ThunkThreeActions> TestThunkThree()
+	{
+		return new(api => { api.Dispatch(new ThunkThreeActions.MyAction()); });
+	}
+
+	// Selectors
+	public static ThunkInstance<ThunkThreeActions> TestThunkFour()
+	{
+		return new(api =>
+		{
+			var firstName = PersonSelectors.FirstName.Apply(api.State);
+			// Do work with firstName
+		});
+	}
+}
+```
+
+#### Usage
+```csharp
+// Basic
+store.DispatchThunk(MyThunks.TestThunkOne(5)).Actions
+	.OfType<ThunkPending<MyThunks.ThunkOneActions>
+	.Subscribe(action =>
+	{
+		Console.WriteLine("Thunk one started.");
+	});
+
+// Task
+var result = await store.DispatchThunk(MyThunks.TestThunkTwo("Hello World")).ToTask();
+```
+
+## Registration
 ```csharp
 var serviceProvider = new ServiceCollection()
 	.AddTransient<IEffectsFactory, MyEffects>()

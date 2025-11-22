@@ -3,6 +3,7 @@ using System.Reactive.Subjects;
 using MentorLake.Redux.Effects;
 using MentorLake.Redux.Reducers;
 using MentorLake.Redux.Selectors;
+using MentorLake.Redux.Thunks;
 
 namespace MentorLake.Redux;
 
@@ -27,6 +28,31 @@ public sealed class ReduxStore
 	{
 		if (action == null) return;
 		await Task.Factory.StartNew(() => ProcessActionQueue(action), CancellationToken.None, TaskCreationOptions.None, _actionTaskScheduler);
+	}
+
+	public ThunkResult<TActions, TResult> DispatchThunk<TActions, TResult>(ThunkInstance<TActions, TResult> thunkInstance)
+	{
+		return new ThunkResult<TActions, TResult>()
+		{
+			Actions = Observable.Create<object>(observer =>
+			{
+				var localActionDispatcher = new Subject<object>();
+				var api = new ThunkApi(localActionDispatcher) { State = State };
+
+				var subscription = localActionDispatcher
+					.Select(a => Observable.FromAsync(async () =>
+					{
+						await Dispatch(a);
+						return a;
+					}))
+					.Concat()
+					.TakeUntil(a => a is ThunkFulfilled<TActions, TResult> or ThunkRejected<TActions>)
+					.Subscribe(observer);
+
+				_ = thunkInstance.ExecuteAsync(api);
+				return subscription;
+			})
+		};
 	}
 
 	private void ProcessActionQueue(object action)

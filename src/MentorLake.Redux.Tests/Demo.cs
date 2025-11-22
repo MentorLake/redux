@@ -1,8 +1,10 @@
+using System.Reactive;
 using System.Reactive.Linq;
 using System.Reactive.Threading.Tasks;
 using MentorLake.Redux.Effects;
 using MentorLake.Redux.Reducers;
 using MentorLake.Redux.Selectors;
+using MentorLake.Redux.Thunks;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace MentorLake.Redux.Tests;
@@ -17,6 +19,30 @@ public record SavePersonWithDispatchAction(PersonState Person);
 public record SavePersonCompleteAction();
 public record SomeOtherAction();
 public record SavePersonWithoutDispatchAction(PersonState Person);
+
+public class TestThunks
+{
+	public class ThunkOneActions;
+
+	public static ThunkInstance<ThunkOneActions> TestThunkOne(int i)
+	{
+		return new(async (api) => { await Task.Delay(i); });
+	}
+
+	public class ThunkTwoActions;
+
+	public static ThunkInstance<ThunkTwoActions> TestThunkTwo(Exception e)
+	{
+		return new(_ => throw e);
+	}
+
+	public class ThunkThreeActions;
+
+	public static ThunkInstance<ThunkThreeActions, string> TestThunkThree(string result)
+	{
+		return new(async api => { await Task.Delay(500); return result; });
+	}
+}
 
 public class MySelectors
 {
@@ -87,14 +113,18 @@ public class Demo
 	[TestInitialize]
 	public void Initialize()
 	{
-		_serviceProvider = new ServiceCollection()
+		_store = new ReduxStore();
+
+		var serviceCollection = new ServiceCollection()
 			.AddTransient<IEffectsFactory, NoDispatchEffectsFactory>()
 			.AddTransient<IEffectsFactory, DispatchAsyncEffectsFactory>()
 			.AddTransient<IReducerFactory, TestReducerFactory>()
-			.AddTransient<PersonService>()
-			.BuildServiceProvider();
+			.AddTransient<TestThunks>()
+			.AddTransient<PersonService>();
 
-		_store = new ReduxStore();
+		serviceCollection.Add(new ServiceDescriptor(typeof(ReduxStore), _store));
+
+		_serviceProvider = serviceCollection.BuildServiceProvider();
 		_store.RegisterReducers(_serviceProvider.GetServices<IReducerFactory>().ToArray());
 		_store.RegisterEffects(_serviceProvider.GetServices<IEffectsFactory>().ToArray());
 	}
@@ -144,6 +174,60 @@ public class Demo
 		await _store.Dispatch(new UpdateFirstNameAction("Bob"));
 
 		Assert.AreEqual(1, changeCounter);
+	}
+
+	[TestMethod]
+	public async Task ThunkBasic()
+	{
+		var store = _serviceProvider.GetRequiredService<ReduxStore>();
+		var thunkResult = store.DispatchThunk(TestThunks.TestThunkOne(1000));
+		var pendingTask = thunkResult.Actions.OfType<ThunkPending<TestThunks.ThunkOneActions>>().Take(1).ToTask();
+		var fulfilledTask = thunkResult.Actions.OfType<ThunkFulfilled<TestThunks.ThunkOneActions>>().Take(1).ToTask();
+		await Task.WhenAll(pendingTask, fulfilledTask);
+	}
+
+	[TestMethod]
+	public async Task ThunkException()
+	{
+		var store = _serviceProvider.GetRequiredService<ReduxStore>();
+		var testException = new Exception("ASDF");
+		var thunkResult = store.DispatchThunk(TestThunks.TestThunkTwo(testException));
+		var pendingTask = thunkResult.Actions.OfType<ThunkPending<TestThunks.ThunkTwoActions>>().Take(1).ToTask();
+		var rejected = thunkResult.Actions.OfType<ThunkRejected<TestThunks.ThunkTwoActions>>().Where(e => e.Exception == testException).Take(1).Timeout(TimeSpan.FromSeconds(1)).ToTask();
+		await Task.WhenAll(pendingTask, rejected);
+	}
+
+	[TestMethod]
+	public async Task ThunkReturnValue()
+	{
+		var store = _serviceProvider.GetRequiredService<ReduxStore>();
+		var thunkResult = store.DispatchThunk(TestThunks.TestThunkThree("Hello"));
+		var result = await thunkResult.Actions
+			.OfType<ThunkFulfilled<TestThunks.ThunkThreeActions, string>>()
+			.Take(1)
+			.Select(a => a.Result)
+			.Timeout(TimeSpan.FromSeconds(2))
+			.ToTask();
+
+		Assert.AreEqual("Hello", result);
+	}
+
+	[TestMethod]
+	public async Task ThunkReturnValueTask()
+	{
+		var store = _serviceProvider.GetRequiredService<ReduxStore>();
+		var thunkResult = store.DispatchThunk(TestThunks.TestThunkThree("Hello"));
+		Assert.AreEqual("Hello", await thunkResult.ToTask());
+	}
+
+	private class TestException : Exception { }
+
+	[TestMethod]
+	[ExpectedException(typeof(TestException))]
+	public async Task ThunkExceptionTask()
+	{
+		var store = _serviceProvider.GetRequiredService<ReduxStore>();
+		await store.DispatchThunk(TestThunks.TestThunkTwo(new TestException())).ToTask();
 	}
 
 	[TestMethod]
