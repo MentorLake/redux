@@ -30,29 +30,36 @@ public sealed class ReduxStore
 		await Task.Factory.StartNew(() => ProcessActionQueue(action), CancellationToken.None, TaskCreationOptions.None, _actionTaskScheduler);
 	}
 
-	public ThunkResult<TActions, TResult> DispatchThunk<TActions, TResult>(ThunkInstance<TActions, TResult> thunkInstance)
+	public ThunkResult<TResult> DispatchThunk<TResult>(ICallableAsyncThunk<TResult> thunk)
 	{
-		return new ThunkResult<TActions, TResult>()
+		return new ThunkResult<TResult>() { Actions = CreateThunkObservable(thunk) };
+	}
+
+	public ThunkResult DispatchThunk(ICallableAsyncThunk thunk)
+	{
+		return new ThunkResult() { Actions = CreateThunkObservable(thunk) };
+	}
+
+	private IObservable<object> CreateThunkObservable(ICallableAsyncThunk thunk)
+	{
+		return Observable.Create<object>(observer =>
 		{
-			Actions = Observable.Create<object>(observer =>
-			{
-				var localActionDispatcher = new Subject<object>();
-				var api = new ThunkApi(localActionDispatcher) { State = State };
+			var localActionDispatcher = new Subject<object>();
+			var api = new ThunkApi(localActionDispatcher) { State = State };
 
-				var subscription = localActionDispatcher
-					.Select(a => Observable.FromAsync(async () =>
-					{
-						await Dispatch(a);
-						return a;
-					}))
-					.Concat()
-					.TakeUntil(a => a is ThunkFulfilled<TActions, TResult> or ThunkRejected<TActions>)
-					.Subscribe(observer);
+			var subscription = localActionDispatcher
+				.Select(a => Observable.FromAsync(async () =>
+				{
+					await Dispatch(a);
+					return a;
+				}))
+				.Concat()
+				.TakeUntil(a => a is ThunkFulfilled or ThunkRejected)
+				.Subscribe(observer);
 
-				_ = thunkInstance.ExecuteAsync(api);
-				return subscription;
-			})
-		};
+			_ = thunk.ExecuteAsync(api);
+			return subscription;
+		});
 	}
 
 	private void ProcessActionQueue(object action)
@@ -110,7 +117,7 @@ public sealed class ReduxStore
 
 	private StoreState Reduce(StoreState state, object action)
 	{
-		var actionName = action.GetType().FullName;
+		var actionName = action is IAction a ? a.ActionName : action.GetType().FullName;
 		var currentState = state;
 
 		foreach (var reducer in _reducers)

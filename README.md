@@ -1,19 +1,19 @@
 ## Getting Started
 
-Create state types
+#### Create state types
 ```csharp
 public record PersonState(string FirstName, string LastName);
 public record AddressState(string ZipCode);
 ```
 
-Create action types
+#### Create action types
 ```csharp
 public record UpdateFirstNameAction(string FirstName);
 public record UpdateLastNameAction(string LastName);
 public record ZipCodeUpdatedAction(string ZipCode);
 ```
 
-Create reducers
+#### Create reducers
 ```csharp
 public class MyReducers : IReducerFactory
 {
@@ -28,7 +28,7 @@ public class MyReducers : IReducerFactory
 }
 ```
 
-Create and setup redux store
+#### Create and setup redux store
 ```csharp
 var serviceProvider = new ServiceCollection()
     .AddTransient<IReducerFactory, MyReducers>()
@@ -38,7 +38,7 @@ var store = new ReduxStore();
 store.RegisterReducers(serviceProvider.GetServices<IReducerFactory>().ToArray());
 ```
 
-Dispatch an action
+#### Dispatch an action
 ```csharp
 await store.Dispatch(new UpdateFirstNameAction("Bob"));
 ```
@@ -59,12 +59,12 @@ public class MySelectors
 }
 ```
 
-Using a selector
+#### Using a selector
 ```csharp
 store.Select(MySelectors.FirstName).Subscribe(firstName => Console.WriteLine(firstName));
 ```
 
-Custom comparison function
+#### Custom comparison function
 ```csharp
 private bool CompareFirstNamesOnly(PersonState x, PersonState y)
 {
@@ -81,7 +81,7 @@ var personSelector = SelectorFactory.Create(MySelectors.Person.WithComparer(Comp
 ```
 
 ## Effects
-
+#### Defining
 ```csharp
 public class MyEffects(PersonService personService) : IEffectsFactory
 {
@@ -102,68 +102,7 @@ public class MyEffects(PersonService personService) : IEffectsFactory
 	};
 }
 ```
-
-## Thunks
-#### Creation
-
-```csharp
-public static class MyThunks
-{
-	// Action class needed to differentiate pending, fulfilled, and rejected actions from other thunks.
-	public class ThunkOneActions;
-
-	// Async thunk with no return value
-	public static ThunkInstance<ThunkOneActions> TestThunkOne(int i)
-	{
-		return new(async (api) => { await Task.Delay(i); });
-	}
-
-	public class ThunkTwoActions;
-
-	// Async thunk with return value
-	public static ThunkInstance<ThunkTwoActions, string> TestThunkTwo(string result)
-	{
-		return new(async api => { await Task.Delay(500); return result; });
-	}
-
-	public class ThunkThreeActions
-	{
-		public record MyAction();
-	}
-
-	// Custom actions
-	public static ThunkInstance<ThunkThreeActions> TestThunkThree()
-	{
-		return new(api => { api.Dispatch(new ThunkThreeActions.MyAction()); });
-	}
-
-	// Selectors
-	public static ThunkInstance<ThunkThreeActions> TestThunkFour()
-	{
-		return new(api =>
-		{
-			var firstName = PersonSelectors.FirstName.Apply(api.State);
-			// Do work with firstName
-		});
-	}
-}
-```
-
-#### Usage
-```csharp
-// Basic
-store.DispatchThunk(MyThunks.TestThunkOne(5)).Actions
-	.OfType<ThunkPending<MyThunks.ThunkOneActions>
-	.Subscribe(action =>
-	{
-		Console.WriteLine("Thunk one started.");
-	});
-
-// Task
-var result = await store.DispatchThunk(MyThunks.TestThunkTwo("Hello World")).ToTask();
-```
-
-## Registration
+#### Registration
 ```csharp
 var serviceProvider = new ServiceCollection()
 	.AddTransient<IEffectsFactory, MyEffects>()
@@ -172,4 +111,93 @@ var serviceProvider = new ServiceCollection()
 
 var store = new ReduxStore();
 store.RegisterEffects(serviceProvider.GetServices<IEffectsFactory>().ToArray());
+```
+
+
+## Thunks
+#### Defining
+```csharp
+public static class MyThunks
+{
+	public static AsyncThunk NoArgNoReturnThunk = new(
+		"NoArgNoReturnThunk",
+		async api => await Task.Delay(1000));
+
+	public static AsyncThunkArgsOnly<int> ThunkWithArgs = new(
+		"ThunkWithArgs",
+		async (api, i) => await Task.Delay(i));
+
+	public static AsyncThunkReturnOnly<string> ThunkWithReturnValue = new(
+		"ThunkWithReturnValue",
+		(api) => Task.FromResult("Hello World"));
+
+	public static AsyncThunk<int, string> ThunkWithArgAndReturnValue = new(
+		"ThunkWithArgAndReturnValue",
+		async (api, i) => Task.FromResult(i.ToString()));
+
+	public static AsyncThunk ThunkUsingSelector = new(
+		"ThunkUsingSelector",
+		api =>
+		{
+			var firstName = FirstNameSelector.Apply(api.State);
+			Console.WriteLine(firstName);
+			return Task.CompletedTask;
+		});
+
+	public static AsyncThunk ThunkDispatchingActions = new(
+		"ThunkDispatchingActions",
+		api =>
+		{
+			api.Dispatch(new MyAction());
+			return Task.CompletedTask;
+		});
+}
+```
+If you need dependency injection then declare your thunks as non-static in a non-static class.
+
+#### Usage
+```csharp
+// Pending Action
+store.DispatchThunk(MyThunks.NoArgNoReturnThunk.Bind()).Actions
+	.Action<ThunkPending>("NoArgNoReturnThunk/pending")
+	.Subscribe(action =>
+	{
+		Console.WriteLine("Thunk started.");
+	});
+
+// Fulfilled action
+store.DispatchThunk(MyThunks.ThunkWithArgAndReturnValue.Bind(123)).Actions
+	.Action<ThunkFulfilled<string>>("ThunkWithArgs/fulfilled")
+	.Subscribe(action =>
+	{
+		Console.WriteLine($"Returned value: {action.Result}");
+	});
+
+// Custom action
+store.DispatchThunk(MyThunks.ThunkWithArgAndReturnValue.Bind(123)).Actions
+	.OfType<MyAction>()
+	.Subscribe(action =>
+	{
+		Console.WriteLine($"My action received!");
+	});
+
+// Task
+var result = await store.DispatchThunk(MyThunks.ThunkWithArgAndReturnValue.Bind(123)).ToTask();
+Console.WriteLine($"Returned value: {result}");
+```
+
+#### Thunk Reducer
+
+```csharp
+
+public record MyThunkState(int CallCount);
+
+public class MyThunkReducers : IReducerFactory
+{
+	public FeatureReducerCollection Create() =>
+	[
+		FeatureReducer.Build(new MyThunkState(0))
+			.On<ThunkFinalized>("NoArgNoReturnThunk/fulfilled", (state, action) => state with { CallCount = state.CallCount + 1 })
+	];
+}
 ```

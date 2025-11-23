@@ -4,18 +4,33 @@ using System.Runtime.ExceptionServices;
 
 namespace MentorLake.Redux.Thunks;
 
-public class ThunkResult<TActions, TResult>
+public class ThunkResult
 {
 	public IObservable<object> Actions { get; init; }
 
-	public Task<TResult> ToTask()
+	public Task ToTask()
 	{
 		return Actions
 			.Do(a =>
 			{
-				if (a is ThunkRejected<TActions> rejected) ExceptionDispatchInfo.Throw(rejected.Exception);
+				if (a is ThunkRejected rejected) ExceptionDispatchInfo.Throw(rejected.Exception);
 			})
-			.OfType<ThunkFulfilled<TActions, TResult>>()
+			.OfType<ThunkFulfilled>()
+			.Take(1)
+			.ToTask();
+	}
+}
+
+public class ThunkResult<TResult> : ThunkResult
+{
+	public new Task<TResult> ToTask()
+	{
+		return Actions
+			.Do(a =>
+			{
+				if (a is ThunkRejected rejected) ExceptionDispatchInfo.Throw(rejected.Exception);
+			})
+			.OfType<ThunkFulfilled<TResult>>()
 			.Select(a => a.Result)
 			.Take(1)
 			.ToTask();

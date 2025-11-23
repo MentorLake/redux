@@ -1,4 +1,3 @@
-using System.Reactive;
 using System.Reactive.Linq;
 using System.Reactive.Threading.Tasks;
 using MentorLake.Redux.Effects;
@@ -20,28 +19,16 @@ public record SavePersonCompleteAction();
 public record SomeOtherAction();
 public record SavePersonWithoutDispatchAction(PersonState Person);
 
-public class TestThunks
+public class TestException : Exception { }
+
+public static class TestThunks
 {
-	public class ThunkOneActions;
-
-	public static ThunkInstance<ThunkOneActions> TestThunkOne(int i)
-	{
-		return new(async (api) => { await Task.Delay(i); });
-	}
-
-	public class ThunkTwoActions;
-
-	public static ThunkInstance<ThunkTwoActions> TestThunkTwo(Exception e)
-	{
-		return new(_ => throw e);
-	}
-
-	public class ThunkThreeActions;
-
-	public static ThunkInstance<ThunkThreeActions, string> TestThunkThree(string result)
-	{
-		return new(async api => { await Task.Delay(500); return result; });
-	}
+	public static AsyncThunkArgOnly<int> Test1 = new("Test1", async (api, arg) => await Task.Delay(arg));
+	public static AsyncThunk Test2 = new("Test2", _ => throw new TestException());
+	public static AsyncThunkReturnOnly<string> Test3 = new("Test3", (api) => Task.FromResult("Hello"));
+	public static AsyncThunk<string, string> Test4 = new("Test4", (api, arg) => Task.FromResult(arg));
+	public static AsyncThunkArgOnly<Exception> Test5 = new("Test5", (api, arg) => throw arg);
+	public static AsyncThunk Test6 = new("Test6", (api) => Task.CompletedTask);
 }
 
 public class MySelectors
@@ -64,6 +51,11 @@ public class PersonService
 	{
 
 	}
+}
+
+public class ThunkState
+{
+	public int CallCount { get; set; }
 }
 
 public class DispatchAsyncEffectsFactory(PersonService personService) : IEffectsFactory
@@ -100,7 +92,10 @@ public class TestReducerFactory : IReducerFactory
 			.On<UpdateLastNameAction>((state, action) => state with { LastName = action.LastName }),
 
 		FeatureReducer.Build(new AddressState("12345"))
-			.On<ZipCodeUpdatedAction>((state, action) => state with { ZipCode = action.ZipCode })
+			.On<ZipCodeUpdatedAction>((state, action) => state with { ZipCode = action.ZipCode }),
+
+		FeatureReducer.Build(new ThunkState())
+			.On<ThunkFulfilled>("Test6/fulfilled", (s, a) => new() { CallCount = s.CallCount+1 })
 	];
 }
 
@@ -119,7 +114,6 @@ public class Demo
 			.AddTransient<IEffectsFactory, NoDispatchEffectsFactory>()
 			.AddTransient<IEffectsFactory, DispatchAsyncEffectsFactory>()
 			.AddTransient<IReducerFactory, TestReducerFactory>()
-			.AddTransient<TestThunks>()
 			.AddTransient<PersonService>();
 
 		serviceCollection.Add(new ServiceDescriptor(typeof(ReduxStore), _store));
@@ -180,9 +174,9 @@ public class Demo
 	public async Task ThunkBasic()
 	{
 		var store = _serviceProvider.GetRequiredService<ReduxStore>();
-		var thunkResult = store.DispatchThunk(TestThunks.TestThunkOne(1000));
-		var pendingTask = thunkResult.Actions.OfType<ThunkPending<TestThunks.ThunkOneActions>>().Take(1).ToTask();
-		var fulfilledTask = thunkResult.Actions.OfType<ThunkFulfilled<TestThunks.ThunkOneActions>>().Take(1).ToTask();
+		var thunkResult = store.DispatchThunk(TestThunks.Test1.Bind(1000));
+		var pendingTask = thunkResult.Actions.OfType<ThunkPending>().Take(1).ToTask();
+		var fulfilledTask = thunkResult.Actions.OfType<ThunkFulfilled>().Take(1).ToTask();
 		await Task.WhenAll(pendingTask, fulfilledTask);
 	}
 
@@ -191,9 +185,9 @@ public class Demo
 	{
 		var store = _serviceProvider.GetRequiredService<ReduxStore>();
 		var testException = new Exception("ASDF");
-		var thunkResult = store.DispatchThunk(TestThunks.TestThunkTwo(testException));
-		var pendingTask = thunkResult.Actions.OfType<ThunkPending<TestThunks.ThunkTwoActions>>().Take(1).ToTask();
-		var rejected = thunkResult.Actions.OfType<ThunkRejected<TestThunks.ThunkTwoActions>>().Where(e => e.Exception == testException).Take(1).Timeout(TimeSpan.FromSeconds(1)).ToTask();
+		var thunkResult = store.DispatchThunk(TestThunks.Test5.Bind(testException));
+		var pendingTask = thunkResult.Actions.OfType<ThunkPending>().Take(1).ToTask();
+		var rejected = thunkResult.Actions.OfType<ThunkRejected>().Where(e => e.Exception == testException).Take(1).Timeout(TimeSpan.FromSeconds(1)).ToTask();
 		await Task.WhenAll(pendingTask, rejected);
 	}
 
@@ -201,9 +195,9 @@ public class Demo
 	public async Task ThunkReturnValue()
 	{
 		var store = _serviceProvider.GetRequiredService<ReduxStore>();
-		var thunkResult = store.DispatchThunk(TestThunks.TestThunkThree("Hello"));
+		var thunkResult = store.DispatchThunk(TestThunks.Test3.Bind());
 		var result = await thunkResult.Actions
-			.OfType<ThunkFulfilled<TestThunks.ThunkThreeActions, string>>()
+			.Action<ThunkFulfilled<string>>("Test3/fulfilled")
 			.Take(1)
 			.Select(a => a.Result)
 			.Timeout(TimeSpan.FromSeconds(2))
@@ -216,18 +210,26 @@ public class Demo
 	public async Task ThunkReturnValueTask()
 	{
 		var store = _serviceProvider.GetRequiredService<ReduxStore>();
-		var thunkResult = store.DispatchThunk(TestThunks.TestThunkThree("Hello"));
+		var thunkResult = store.DispatchThunk(TestThunks.Test4.Bind("Hello"));
 		Assert.AreEqual("Hello", await thunkResult.ToTask());
 	}
 
-	private class TestException : Exception { }
+	[TestMethod]
+	public async Task ThunkReducer()
+	{
+		var store = _serviceProvider.GetRequiredService<ReduxStore>();
+		var thunkResult = store.DispatchThunk(TestThunks.Test6.Bind());
+		await thunkResult.ToTask();
+		var count = await store.Select(s => s.GetFeatureState<ThunkState>()).Select(s => s.CallCount).Take(1).ToTask();
+		Assert.AreEqual(count, 1);
+	}
 
 	[TestMethod]
 	[ExpectedException(typeof(TestException))]
 	public async Task ThunkExceptionTask()
 	{
 		var store = _serviceProvider.GetRequiredService<ReduxStore>();
-		await store.DispatchThunk(TestThunks.TestThunkTwo(new TestException())).ToTask();
+		await store.DispatchThunk(TestThunks.Test2.Bind()).ToTask();
 	}
 
 	[TestMethod]

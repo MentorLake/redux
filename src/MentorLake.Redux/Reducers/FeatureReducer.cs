@@ -23,6 +23,17 @@ public class FeatureReducer<TFeatureState>(TFeatureState initialState) : IFeatur
 		return this;
 	}
 
+	public FeatureReducer<TFeatureState> On<TAction>(string actionName, Func<TFeatureState, TAction, TFeatureState> f) where TAction : class
+	{
+		_actionReducers.Add(new ActionReducer<TFeatureState>
+		{
+			Reduce = (state, action) => action is TAction actionT1 ? f(state, actionT1) : state,
+			ActionType = actionName
+		});
+
+		return this;
+	}
+
 	public StoreState InitializeStore(StoreState state)
 	{
 		return state.UpdateFeatureState(initialState);

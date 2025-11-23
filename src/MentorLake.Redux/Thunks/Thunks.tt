@@ -1,0 +1,118 @@
+<#@ template hostspecific="false" language="C#" #>
+<#@ output extension=".cs" #>
+<#@ import namespace="System" #>
+
+namespace MentorLake.Redux.Thunks;
+
+public readonly struct AsyncThunk(string actionName, Func<ThunkApi, Task> work)
+{
+	private readonly CallableAsyncThunk _thunk = new(actionName, work);
+	public CallableAsyncThunk Bind() => _thunk;
+	public static implicit operator CallableAsyncThunk(AsyncThunk thunk) => thunk.Bind();
+}
+
+public readonly struct AsyncThunkReturnOnly<TResult>(string actionName, Func<ThunkApi, Task<TResult>> work)
+{
+	private readonly CallableAsyncThunkReturnOnly<TResult> _thunk = new(actionName, work);
+	public CallableAsyncThunkReturnOnly<TResult> Bind() => _thunk;
+	public static implicit operator CallableAsyncThunkReturnOnly<TResult>(AsyncThunkReturnOnly<TResult> thunk) => thunk.Bind();
+}
+
+public readonly struct CallableAsyncThunk(string actionName, Func<ThunkApi, Task> work) : ICallableAsyncThunk
+{
+	public async Task ExecuteAsync(ThunkApi api)
+	{
+		try
+		{
+			api.Dispatch(new ThunkPending(actionName));
+			await work(api);
+			api.Dispatch(new ThunkFulfilled(actionName));
+		}
+		catch (Exception e)
+		{
+			api.Dispatch(new ThunkRejected(actionName, e));
+		}
+	}
+}
+
+public readonly struct CallableAsyncThunkReturnOnly<TResult>(string actionName, Func<ThunkApi, Task<TResult>> work) : ICallableAsyncThunk<TResult>
+{
+	public async Task ExecuteAsync(ThunkApi api)
+	{
+		try
+		{
+			api.Dispatch(new ThunkPending(actionName));
+			var result = await work(api);
+			api.Dispatch(new ThunkFulfilled<TResult>(actionName, result));
+		}
+		catch (Exception e)
+		{
+			api.Dispatch(new ThunkRejected(actionName, e));
+		}
+	}
+}
+<#
+	for (var i = 1; i <= 7; i++)
+	{
+#>
+
+public readonly struct AsyncThunkArgOnly<<#=Repeat(i, "TArg{i}")#>>(string actionName, Func<ThunkApi, <#=Repeat(i, "TArg{i}")#>, Task> work)
+{
+	public CallableAsyncThunkArgOnly<<#=Repeat(i, "TArg{i}")#>> Bind(<#=Repeat(i, "TArg{i} arg{i}")#>) => new(actionName, work, <#=Repeat(i, "arg{i}")#>);
+}
+
+public readonly struct AsyncThunk<<#=Repeat(i, "TArg{i}")#>, TResult>(string actionName, Func<ThunkApi, <#=Repeat(i, "TArg{i}")#>, Task<TResult>> work)
+{
+	public CallableAsyncThunk<<#=Repeat(i, "TArg{i}")#>, TResult> Bind(<#=Repeat(i, "TArg{i} arg{i}")#>) => new(actionName, work, <#=Repeat(i, "arg{i}")#>);
+}
+
+public readonly struct CallableAsyncThunkArgOnly<<#=Repeat(i, "TArg{i}")#>>(string actionName, Func<ThunkApi, <#=Repeat(i, "TArg{i}")#>, Task> work, <#=Repeat(i, "TArg{i} arg{i}")#>) : ICallableAsyncThunk
+{
+	public async Task ExecuteAsync(ThunkApi api)
+	{
+		try
+		{
+			api.Dispatch(new ThunkPending(actionName));
+			await work(api, <#=Repeat(i, "arg{i}")#>);
+			api.Dispatch(new ThunkFulfilled(actionName));
+		}
+		catch (Exception e)
+		{
+			api.Dispatch(new ThunkRejected(actionName, e));
+		}
+	}
+}
+
+public readonly struct CallableAsyncThunk<<#=Repeat(i, "TArg{i}")#>, TResult>(string actionName, Func<ThunkApi, <#=Repeat(i, "TArg{i}")#>, Task<TResult>> work, <#=Repeat(i, "TArg{i} arg{i}")#>) : ICallableAsyncThunk<TResult>
+{
+	public async Task ExecuteAsync(ThunkApi api)
+	{
+		try
+		{
+			api.Dispatch(new ThunkPending(actionName));
+			var result = await work(api, <#=Repeat(i, "arg{i}")#>);
+			api.Dispatch(new ThunkFulfilled<TResult>(actionName, result));
+		}
+		catch (Exception e)
+		{
+			api.Dispatch(new ThunkRejected(actionName, e));
+		}
+	}
+}
+
+<#
+	}
+#>
+<#+
+	private string Repeat(int num, string template, string separator = ",")
+	{
+		var items = new string[num];
+
+		for (var i = 0; i < num; i++)
+		{
+			items[i] = template.Replace("{i}", (i + 1).ToString());
+		}
+
+		return string.Join(separator, items);
+	}
+#>
