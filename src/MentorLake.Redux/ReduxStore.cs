@@ -30,17 +30,17 @@ public sealed class ReduxStore
 		await Task.Factory.StartNew(() => ProcessActionQueue(action), CancellationToken.None, TaskCreationOptions.None, _actionTaskScheduler);
 	}
 
-	public ThunkResult<TResult> DispatchThunk<TResult>(ICallableAsyncThunk<TResult> thunk)
+	public ThunkResult<TResult> DispatchThunk<TResult>(ICallableThunkFunc<TResult> thunk)
 	{
 		return new ThunkResult<TResult>() { Actions = CreateThunkObservable(thunk) };
 	}
 
-	public ThunkResult DispatchThunk(ICallableAsyncThunk thunk)
+	public ThunkResult DispatchThunk(ICallableThunkAction thunk)
 	{
 		return new ThunkResult() { Actions = CreateThunkObservable(thunk) };
 	}
 
-	private IObservable<object> CreateThunkObservable(ICallableAsyncThunk thunk)
+	private IObservable<object> CreateThunkObservable(ICallableThunkAction thunk)
 	{
 		return Observable.Create<object>(observer =>
 		{

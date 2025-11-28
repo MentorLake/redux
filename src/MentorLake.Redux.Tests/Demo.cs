@@ -23,12 +23,12 @@ public class TestException : Exception { }
 
 public static class TestThunks
 {
-	public static AsyncThunkArgOnly<int> Test1 = new("Test1", async (api, arg) => await Task.Delay(arg));
-	public static AsyncThunk Test2 = new("Test2", _ => throw new TestException());
-	public static AsyncThunkReturnOnly<string> Test3 = new("Test3", (api) => Task.FromResult("Hello"));
-	public static AsyncThunk<string, string> Test4 = new("Test4", (api, arg) => Task.FromResult(arg));
-	public static AsyncThunkArgOnly<Exception> Test5 = new("Test5", (api, arg) => throw arg);
-	public static AsyncThunk Test6 = new("Test6", (api) => Task.CompletedTask);
+	public static ThunkAction<int> Test1 = new("Test1", async (api, arg) => await Task.Delay(arg));
+	public static ThunkAction Test2 = new("Test2", _ => throw new TestException());
+	public static ThunkFunc<string> Test3 = new("Test3", (api) => Task.FromResult("Hello"));
+	public static ThunkFunc<string, string> Test4 = new("Test4", (api, arg) => Task.FromResult(arg));
+	public static ThunkAction<Exception> Test5 = new("Test5", (api, arg) => throw arg);
+	public static ThunkAction Test6 = new("Test6", (api) => Task.CompletedTask);
 }
 
 public class MySelectors
