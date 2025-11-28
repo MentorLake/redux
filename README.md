@@ -119,23 +119,23 @@ store.RegisterEffects(serviceProvider.GetServices<IEffectsFactory>().ToArray());
 ```csharp
 public static class MyThunks
 {
-	public static AsyncThunk NoArgNoReturnThunk = new(
+	public static ThunkAction NoArgNoReturnThunk = new(
 		"NoArgNoReturnThunk",
 		async api => await Task.Delay(1000));
 
-	public static AsyncThunkArgsOnly<int> ThunkWithArgs = new(
+	public static ThunkAction<int> ThunkWithArgs = new(
 		"ThunkWithArgs",
 		async (api, i) => await Task.Delay(i));
 
-	public static AsyncThunkReturnOnly<string> ThunkWithReturnValue = new(
+	public static ThunkFunc<string> ThunkWithReturnValue = new(
 		"ThunkWithReturnValue",
 		(api) => Task.FromResult("Hello World"));
 
-	public static AsyncThunk<int, string> ThunkWithArgAndReturnValue = new(
+	public static ThunkFunc<int, string> ThunkWithArgAndReturnValue = new(
 		"ThunkWithArgAndReturnValue",
 		async (api, i) => Task.FromResult(i.ToString()));
 
-	public static AsyncThunk ThunkUsingSelector = new(
+	public static ThunkAction ThunkUsingSelector = new(
 		"ThunkUsingSelector",
 		api =>
 		{
@@ -144,7 +144,7 @@ public static class MyThunks
 			return Task.CompletedTask;
 		});
 
-	public static AsyncThunk ThunkDispatchingActions = new(
+	public static ThunkAction ThunkDispatchingActions = new(
 		"ThunkDispatchingActions",
 		api =>
 		{
