@@ -9,25 +9,23 @@ namespace MentorLake.Redux;
 
 public sealed class ReduxStore
 {
-	private readonly TaskScheduler _actionTaskScheduler;
 	private readonly Subject<object> _actionDispatcher = new();
 	private readonly List<ActionReducer<StoreState>> _reducers = new();
 	private readonly BehaviorSubject<StoreState> _stateSubject;
 
-	public ReduxStore(TaskScheduler dispatchedActionScheduler = null)
+	public ReduxStore()
 	{
 		State = new StoreState();
 		_stateSubject = new BehaviorSubject<StoreState>(State);
-		_actionTaskScheduler = dispatchedActionScheduler ?? new ConcurrentExclusiveSchedulerPair().ExclusiveScheduler;
 	}
 
 	public StoreState State { get; private set; }
 	public IObservable<object> Actions => _actionDispatcher;
 
-	public async Task Dispatch(object action)
+	public void Dispatch(object action)
 	{
 		if (action == null) return;
-		await Task.Factory.StartNew(() => ProcessActionQueue(action), CancellationToken.None, TaskCreationOptions.None, _actionTaskScheduler);
+		ProcessActionQueue(action);
 	}
 
 	public ThunkResult<TResult> DispatchThunk<TResult>(ICallableThunkFunc<TResult> thunk)
@@ -45,15 +43,10 @@ public sealed class ReduxStore
 		return Observable.Create<object>(observer =>
 		{
 			var localActionDispatcher = new Subject<object>();
-			var api = new ThunkApi(localActionDispatcher) { State = State };
+			var api = new ThunkApi(localActionDispatcher, this);
 
 			var subscription = localActionDispatcher
-				.Select(a => Observable.FromAsync(async () =>
-				{
-					await Dispatch(a);
-					return a;
-				}))
-				.Concat()
+				.Do(Dispatch)
 				.TakeUntil(a => a is ThunkFulfilled or ThunkRejected)
 				.Subscribe(observer);
 

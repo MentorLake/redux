@@ -1,5 +1,4 @@
 using System.Reactive.Linq;
-using System.Reactive.Threading.Tasks;
 using MentorLake.Redux.Effects;
 using MentorLake.Redux.Reducers;
 using MentorLake.Redux.Selectors;
@@ -23,12 +22,28 @@ public class TestException : Exception { }
 
 public static class TestThunks
 {
-	public static ThunkAction<int> Test1 = new("Test1", async (api, arg) => await Task.Delay(arg));
+	public static ThunkAction Test1 = new("Test1", _ => Task.CompletedTask);
 	public static ThunkAction Test2 = new("Test2", _ => throw new TestException());
-	public static ThunkFunc<string> Test3 = new("Test3", (api) => Task.FromResult("Hello"));
-	public static ThunkFunc<string, string> Test4 = new("Test4", (api, arg) => Task.FromResult(arg));
-	public static ThunkAction<Exception> Test5 = new("Test5", (api, arg) => throw arg);
-	public static ThunkAction Test6 = new("Test6", (api) => Task.CompletedTask);
+	public static ThunkFunc<string> Test3 = new("Test3", _ => Task.FromResult("Hello"));
+	public static ThunkFunc<string, string> Test4 = new("Test4", (_, arg) => Task.FromResult(arg));
+	public static ThunkAction<Exception> Test5 = new("Test5", (_, arg) => throw arg);
+	public static ThunkAction Test6 = new("Test6", _ => Task.CompletedTask);
+	public static ThunkFunc<string, string> TestLiveState = new("TestLiveState", (api, newName) =>
+	{
+		var before = MySelectors.FirstName.Apply(api.State);
+		api.Dispatch(new UpdateFirstNameAction(newName));
+		var after = MySelectors.FirstName.Apply(api.State);
+		return Task.FromResult($"{before}->{after}");
+	});
+	public static ThunkFunc<string, string> TestNestedThunk = new("TestNestedThunk", async (api, name) =>
+	{
+		var nestedResult = await api.DispatchThunk(Test4.Bind(name)).ToTask();
+		return $"nested:{nestedResult}";
+	});
+	public static ThunkAction TestNestedThunkAction = new("TestNestedThunkAction", async api =>
+	{
+		await api.DispatchThunk(Test6.Bind()).ToTask();
+	});
 }
 
 public class MySelectors
@@ -42,14 +57,8 @@ public class MySelectors
 
 public class PersonService
 {
-	public Task SavePersonAsync(PersonState state)
-	{
-		return Task.Delay(100);
-	}
-
 	public void SavePerson(PersonState state)
 	{
-
 	}
 }
 
@@ -58,29 +67,26 @@ public class ThunkState
 	public int CallCount { get; set; }
 }
 
-public class DispatchAsyncEffectsFactory(PersonService personService) : IEffectsFactory
+public class DispatchEffectsFactory(PersonService personService) : IEffectsFactory
 {
-	public IEnumerable<Effect> Create() => new[]
-	{
-		// Async effect with actions dispatched
+	public IEnumerable<Effect> Create() =>
+	[
 		EffectsFactory.Create(actions => actions
-			.OfType<SavePersonWithDispatchAction>()
-			.Select(action => Observable.FromAsync(() => personService.SavePersonAsync(action.Person)))
-			.Concat()
-			.SelectMany(_ => new object[] { new SavePersonCompleteAction(), new SomeOtherAction() }),
-			new EffectConfig() { Dispatch = true })
-	};
+				.OfType<SavePersonWithDispatchAction>()
+				.Do(action => personService.SavePerson(action.Person))
+				.SelectMany(_ => new object[] { new SavePersonCompleteAction(), new SomeOtherAction() }),
+			new EffectConfig { Dispatch = true })
+	];
 }
 
 public class NoDispatchEffectsFactory(PersonService personService) : IEffectsFactory
 {
-	public IEnumerable<Effect> Create() => new[]
-	{
-		// Vanilla effect with no dispatch
+	public IEnumerable<Effect> Create() =>
+	[
 		EffectsFactory.Create(actions => actions
 			.OfType<SavePersonWithoutDispatchAction>()
-			.Do(action => personService.SavePerson(action.Person))),
-	};
+			.Do(action => personService.SavePerson(action.Person)))
+	];
 }
 
 public class TestReducerFactory : IReducerFactory
@@ -95,7 +101,7 @@ public class TestReducerFactory : IReducerFactory
 			.On<ZipCodeUpdatedAction>((state, action) => state with { ZipCode = action.ZipCode }),
 
 		FeatureReducer.Build(new ThunkState())
-			.On<ThunkFulfilled>("Test6/fulfilled", (s, a) => new() { CallCount = s.CallCount+1 })
+			.On<ThunkFulfilled>("Test6/fulfilled", (s, a) => new() { CallCount = s.CallCount + 1 })
 	];
 }
 
@@ -103,163 +109,158 @@ public class TestReducerFactory : IReducerFactory
 public class Demo
 {
 	private ReduxStore _store;
-	private ServiceProvider _serviceProvider;
 
 	[TestInitialize]
 	public void Initialize()
 	{
 		_store = new ReduxStore();
 
-		var serviceCollection = new ServiceCollection()
+		var services = new ServiceCollection()
 			.AddTransient<IEffectsFactory, NoDispatchEffectsFactory>()
-			.AddTransient<IEffectsFactory, DispatchAsyncEffectsFactory>()
+			.AddTransient<IEffectsFactory, DispatchEffectsFactory>()
 			.AddTransient<IReducerFactory, TestReducerFactory>()
-			.AddTransient<PersonService>();
+			.AddTransient<PersonService>()
+			.BuildServiceProvider();
 
-		serviceCollection.Add(new ServiceDescriptor(typeof(ReduxStore), _store));
-
-		_serviceProvider = serviceCollection.BuildServiceProvider();
-		_store.RegisterReducers(_serviceProvider.GetServices<IReducerFactory>().ToArray());
-		_store.RegisterEffects(_serviceProvider.GetServices<IEffectsFactory>().ToArray());
+		_store.RegisterReducers(services.GetServices<IReducerFactory>().ToArray());
+		_store.RegisterEffects(services.GetServices<IEffectsFactory>().ToArray());
 	}
 
 	[TestMethod]
-	[Timeout(1000)]
-	public async Task ReducersAndSelectors()
+	public void ReducersAndSelectors()
 	{
-		var selectorTask = _store.Select(MySelectors.FirstName).Take(1).ToTask();
-
-		await _store.Dispatch(new UpdateFirstNameAction("Bob"));
-		await selectorTask;
-
+		_store.Dispatch(new UpdateFirstNameAction("Bob"));
 		Assert.AreEqual("Bob", _store.State.GetFeatureState<PersonState>().FirstName);
 	}
 
 	[TestMethod]
-	[Timeout(1000)]
-	public async Task EffectsDispatch()
+	public void EffectsDispatch()
 	{
-		var dispatchedActionsTask = _store.Actions.Take(3).ToArray().ToTask();
-		await _store.Dispatch(new SavePersonWithDispatchAction(new PersonState("Hello", "World")));
+		var actions = new List<object>();
+		using var _ = _store.Actions.Subscribe(actions.Add);
 
-		var actions = await dispatchedActionsTask;
-		Assert.AreEqual(typeof(SavePersonWithDispatchAction), actions[0].GetType());
-		Assert.AreEqual(typeof(SavePersonCompleteAction), actions[1].GetType());
-		Assert.AreEqual(typeof(SomeOtherAction), actions[2].GetType());
+		_store.Dispatch(new SavePersonWithDispatchAction(new PersonState("Hello", "World")));
+
+		Assert.AreEqual(3, actions.Count);
+		Assert.AreEqual(1, actions.OfType<SavePersonWithDispatchAction>().Count());
+		Assert.AreEqual(1, actions.OfType<SavePersonCompleteAction>().Count());
+		Assert.AreEqual(1, actions.OfType<SomeOtherAction>().Count());
 	}
 
 	[TestMethod]
-	public async Task EffectsNoDispatch()
+	public void EffectsNoDispatch()
 	{
 		var actionsCount = 0;
-		_store.Actions.Subscribe(_ => actionsCount++);
-		await _store.Dispatch(new SavePersonWithoutDispatchAction(new PersonState("Hello", "World")));
+		using var _ = _store.Actions.Subscribe(_ => actionsCount++);
+
+		_store.Dispatch(new SavePersonWithoutDispatchAction(new PersonState("Hello", "World")));
 		Assert.AreEqual(1, actionsCount);
 	}
 
 	[TestMethod]
-	public async Task SelectorComparison()
+	public void SelectorComparison()
 	{
-		var changeCounter = 0;
+		var emissions = new List<PersonState>();
 		var personSelector = SelectorFactory.Create(MySelectors.Person, p => p, CompareFirstNamesOnly);
-		_store.Select(personSelector).Take(1).Subscribe(_ => changeCounter++);
+		using var _ = _store.Select(personSelector).Subscribe(emissions.Add);
 
-		await _store.Dispatch(new UpdateLastNameAction("Test"));
-		await _store.Dispatch(new UpdateFirstNameAction("Bob"));
+		_store.Dispatch(new UpdateLastNameAction("Test"));
+		_store.Dispatch(new UpdateFirstNameAction("Bob"));
 
-		Assert.AreEqual(1, changeCounter);
+		Assert.AreEqual(2, emissions.Count);
+		Assert.AreEqual("Hello", emissions[0].FirstName);
+		Assert.AreEqual("Bob", emissions[1].FirstName);
 	}
 
 	[TestMethod]
-	public async Task ThunkBasic()
+	public void InlineSelectorComparison()
 	{
-		var store = _serviceProvider.GetRequiredService<ReduxStore>();
-		var thunkResult = store.DispatchThunk(TestThunks.Test1.Bind(1000));
-		var pendingTask = thunkResult.Actions.OfType<ThunkPending>().Take(1).ToTask();
-		var fulfilledTask = thunkResult.Actions.OfType<ThunkFulfilled>().Take(1).ToTask();
-		await Task.WhenAll(pendingTask, fulfilledTask);
+		var emissions = new List<PersonState>();
+		var personSelector = SelectorFactory.Create(
+			MySelectors.Person.WithComparer(CompareFirstNamesOnly),
+			p => p);
+		using var _ = _store.Select(personSelector).Subscribe(emissions.Add);
+
+		_store.Dispatch(new UpdateLastNameAction("Test"));
+		_store.Dispatch(new UpdateFirstNameAction("Bob"));
+
+		Assert.AreEqual(2, emissions.Count);
 	}
 
 	[TestMethod]
-	public async Task ThunkException()
+	public void ThunkBasic()
 	{
-		var store = _serviceProvider.GetRequiredService<ReduxStore>();
+		var actions = new List<object>();
+		using var _ = _store.DispatchThunk(TestThunks.Test1.Bind()).Actions.Subscribe(actions.Add);
+
+		Assert.IsInstanceOfType(actions[0], typeof(ThunkPending));
+		Assert.IsInstanceOfType(actions[1], typeof(ThunkFulfilled));
+	}
+
+	[TestMethod]
+	public void ThunkException()
+	{
 		var testException = new Exception("ASDF");
-		var thunkResult = store.DispatchThunk(TestThunks.Test5.Bind(testException));
-		var pendingTask = thunkResult.Actions.OfType<ThunkPending>().Take(1).ToTask();
-		var rejected = thunkResult.Actions.OfType<ThunkRejected>().Where(e => e.Exception == testException).Take(1).Timeout(TimeSpan.FromSeconds(1)).ToTask();
-		await Task.WhenAll(pendingTask, rejected);
+		var actions = new List<object>();
+		using var _ = _store.DispatchThunk(TestThunks.Test5.Bind(testException)).Actions.Subscribe(actions.Add);
+
+		Assert.IsInstanceOfType(actions[0], typeof(ThunkPending));
+		Assert.IsInstanceOfType(actions[1], typeof(ThunkRejected));
+		Assert.AreSame(testException, ((ThunkRejected)actions[1]).Exception);
 	}
 
 	[TestMethod]
 	public async Task ThunkReturnValue()
 	{
-		var store = _serviceProvider.GetRequiredService<ReduxStore>();
-		var thunkResult = store.DispatchThunk(TestThunks.Test3.Bind());
-		var result = await thunkResult.Actions
-			.Action<ThunkFulfilled<string>>("Test3/fulfilled")
-			.Take(1)
-			.Select(a => a.Result)
-			.Timeout(TimeSpan.FromSeconds(2))
-			.ToTask();
-
-		Assert.AreEqual("Hello", result);
-	}
-
-	[TestMethod]
-	public async Task ThunkReturnValueTask()
-	{
-		var store = _serviceProvider.GetRequiredService<ReduxStore>();
-		var thunkResult = store.DispatchThunk(TestThunks.Test4.Bind("Hello"));
-		Assert.AreEqual("Hello", await thunkResult.ToTask());
+		Assert.AreEqual("Hello", await _store.DispatchThunk(TestThunks.Test3.Bind()).ToTask());
+		Assert.AreEqual("Hello", await _store.DispatchThunk(TestThunks.Test4.Bind("Hello")).ToTask());
 	}
 
 	[TestMethod]
 	public async Task ThunkReducer()
 	{
-		var store = _serviceProvider.GetRequiredService<ReduxStore>();
-		var thunkResult = store.DispatchThunk(TestThunks.Test6.Bind());
-		await thunkResult.ToTask();
-		var count = await store.Select(s => s.GetFeatureState<ThunkState>()).Select(s => s.CallCount).Take(1).ToTask();
-		Assert.AreEqual(count, 1);
+		await _store.DispatchThunk(TestThunks.Test6.Bind()).ToTask();
+		Assert.AreEqual(1, _store.State.GetFeatureState<ThunkState>().CallCount);
+	}
+
+	[TestMethod]
+	public async Task ThunkApiStateIsLive()
+	{
+		var result = await _store.DispatchThunk(TestThunks.TestLiveState.Bind("Bob")).ToTask();
+		Assert.AreEqual("Hello->Bob", result);
+		Assert.AreEqual("Bob", _store.State.GetFeatureState<PersonState>().FirstName);
+	}
+
+	[TestMethod]
+	public async Task ThunkApiDispatchThunkWithResult()
+	{
+		var result = await _store.DispatchThunk(TestThunks.TestNestedThunk.Bind("World")).ToTask();
+		Assert.AreEqual("nested:World", result);
+	}
+
+	[TestMethod]
+	public async Task ThunkApiDispatchThunkAction()
+	{
+		await _store.DispatchThunk(TestThunks.TestNestedThunkAction.Bind()).ToTask();
+		Assert.AreEqual(1, _store.State.GetFeatureState<ThunkState>().CallCount);
 	}
 
 	[TestMethod]
 	[ExpectedException(typeof(TestException))]
 	public async Task ThunkExceptionTask()
 	{
-		var store = _serviceProvider.GetRequiredService<ReduxStore>();
-		await store.DispatchThunk(TestThunks.Test2.Bind()).ToTask();
+		await _store.DispatchThunk(TestThunks.Test2.Bind()).ToTask();
 	}
 
 	[TestMethod]
-	public async Task InlineSelectorComparison()
-	{
-		var changeCounter = 0;
-
-		var personSelector = SelectorFactory.Create(
-			MySelectors.Person.WithComparer(CompareFirstNamesOnly),
-			p => p);
-
-		_store.Select(personSelector).Take(1).Subscribe(_ => changeCounter++);
-
-		await _store.Dispatch(new UpdateLastNameAction("Test"));
-		await _store.Dispatch(new UpdateFirstNameAction("Bob"));
-
-		Assert.AreEqual(1, changeCounter);
-	}
-
-	[TestMethod]
-	public async Task EffectsValueTuple()
+	public void EffectsValueTuple()
 	{
 		_store.RegisterEffects(EffectsFactory.Create(actions => actions.Select(_ => (1, 2))));
-
-
-		await _store.Dispatch(new UpdateLastNameAction("Test"));
-		await _store.Dispatch(new UpdateFirstNameAction("Bob"));
+		_store.Dispatch(new UpdateLastNameAction("Test"));
+		_store.Dispatch(new UpdateFirstNameAction("Bob"));
 	}
 
-	private bool CompareFirstNamesOnly(PersonState x, PersonState y)
+	private static bool CompareFirstNamesOnly(PersonState x, PersonState y)
 	{
 		if (ReferenceEquals(x, y)) return true;
 		if (x == null || y == null) return false;

@@ -40,10 +40,10 @@ store.RegisterReducers(serviceProvider.GetServices<IReducerFactory>().ToArray())
 
 #### Dispatch an action
 ```csharp
-await store.Dispatch(new UpdateFirstNameAction("Bob"));
+store.Dispatch(new UpdateFirstNameAction("Bob"));
 ```
 
-The Dispatch method returns a task that completes after the reducers and effects run.  Note, the task does not wait for asynchronous effects to complete.
+Dispatch is synchronous: reducers run immediately and state is updated before the call returns. Asynchronous effects continue in the background and are not awaited.
 
 ## Selectors
 
@@ -150,6 +150,14 @@ public static class MyThunks
 		{
 			api.Dispatch(new MyAction());
 			return Task.CompletedTask;
+		});
+
+	public static ThunkFunc<string> ThunkDispatchingThunk = new(
+		"ThunkDispatchingThunk",
+		async api =>
+		{
+			var result = await api.DispatchThunk(ThunkWithReturnValue.Bind()).ToTask();
+			return $"from nested: {result}";
 		});
 }
 ```
