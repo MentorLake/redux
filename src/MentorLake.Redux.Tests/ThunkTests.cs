@@ -148,4 +148,220 @@ public class ThunkTests
 		await _store.DispatchThunk(thunk.Bind()).ToTask();
 		Assert.AreEqual("FromThunk", _store.State.GetFeatureState<PersonState>().FirstName);
 	}
+
+	[TestMethod]
+	public async Task ThunkAction_CanBeCreatedWithoutName()
+	{
+		var ran = false;
+		var thunk = new ThunkAction(_ =>
+		{
+			ran = true;
+			return Task.CompletedTask;
+		});
+
+		var result = _store.DispatchThunk(thunk.Bind());
+		var pending = await result.Actions.OfType<ThunkPending>().Take(1).ToTask();
+		var fulfilled = await result.Actions.OfType<ThunkFulfilled>().Take(1).ToTask();
+
+		Assert.IsTrue(ran);
+		Assert.AreEqual("/pending", pending.ActionName);
+		Assert.AreEqual("/fulfilled", fulfilled.ActionName);
+	}
+
+	[TestMethod]
+	public async Task ThunkFunc_CanBeCreatedWithoutName()
+	{
+		var thunk = new ThunkFunc<string>(_ => Task.FromResult("ok"));
+
+		var result = await _store.DispatchThunk(thunk.Bind()).ToTask();
+		Assert.AreEqual("ok", result);
+	}
+
+	[TestMethod]
+	public async Task MultiArgThunkAction_CanBeCreatedWithoutName()
+	{
+		int? captured = null;
+		var thunk = new ThunkAction<int>((_, value) =>
+		{
+			captured = value;
+			return Task.CompletedTask;
+		});
+
+		await _store.DispatchThunk(thunk.Bind(42)).ToTask();
+		Assert.AreEqual(42, captured);
+	}
+
+	[TestMethod]
+	public async Task MultiArgThunkFunc_CanBeCreatedWithoutName()
+	{
+		var thunk = new ThunkFunc<int, string, string>((_, a, b) => Task.FromResult($"{a}-{b}"));
+
+		var result = await _store.DispatchThunk(thunk.Bind(3, "c")).ToTask();
+		Assert.AreEqual("3-c", result);
+	}
+
+	[TestMethod]
+	public async Task ThunkAction_ImplicitlyConvertsFromFunc()
+	{
+		Func<ThunkApi, Task> work = api =>
+		{
+			api.Dispatch(new UpdateFirstNameAction("Implicit"));
+			return Task.CompletedTask;
+		};
+
+		ThunkAction thunk = work;
+		await _store.DispatchThunk(thunk.Bind()).ToTask();
+		Assert.AreEqual("Implicit", _store.State.GetFeatureState<PersonState>().FirstName);
+	}
+
+	[TestMethod]
+	public async Task ThunkFunc_ImplicitlyConvertsFromFunc()
+	{
+		Func<ThunkApi, Task<int>> work = _ => Task.FromResult(99);
+
+		ThunkFunc<int> thunk = work;
+		var result = await _store.DispatchThunk(thunk.Bind()).ToTask();
+		Assert.AreEqual(99, result);
+	}
+
+	[TestMethod]
+	public async Task MultiArgThunkAction_ImplicitlyConvertsFromFunc()
+	{
+		string captured = null;
+		Func<ThunkApi, string, Task> work = (_, name) =>
+		{
+			captured = name;
+			return Task.CompletedTask;
+		};
+
+		ThunkAction<string> thunk = work;
+		await _store.DispatchThunk(thunk.Bind("bound")).ToTask();
+		Assert.AreEqual("bound", captured);
+	}
+
+	[TestMethod]
+	public async Task MultiArgThunkFunc_ImplicitlyConvertsFromFunc()
+	{
+		Func<ThunkApi, int, int, Task<int>> work = (_, a, b) => Task.FromResult(a + b);
+
+		ThunkFunc<int, int, int> thunk = work;
+		var result = await _store.DispatchThunk(thunk.Bind(4, 5)).ToTask();
+		Assert.AreEqual(9, result);
+	}
+
+	[TestMethod]
+	public async Task CallableThunkAction_ImplicitlyConvertsFromFunc()
+	{
+		Func<ThunkApi, Task> work = api =>
+		{
+			api.Dispatch(new UpdateFirstNameAction("CallableImplicit"));
+			return Task.CompletedTask;
+		};
+
+		CallableThunkAction callable = work;
+		await _store.DispatchThunk(callable).ToTask();
+		Assert.AreEqual("CallableImplicit", _store.State.GetFeatureState<PersonState>().FirstName);
+	}
+
+	[TestMethod]
+	public async Task DispatchThunk_AcceptsLambdaDirectly()
+	{
+		await _store.DispatchThunk(api =>
+		{
+			api.Dispatch(new UpdateFirstNameAction("DirectLambda"));
+			return Task.CompletedTask;
+		}).ToTask();
+
+		Assert.AreEqual("DirectLambda", _store.State.GetFeatureState<PersonState>().FirstName);
+	}
+
+	[TestMethod]
+	public async Task DispatchThunk_AcceptsLambdaFuncDirectly()
+	{
+		var result = await _store.DispatchThunk(_ => Task.FromResult("from-lambda")).ToTask();
+		Assert.AreEqual("from-lambda", result);
+	}
+
+	[TestMethod]
+	public async Task ThunkApi_DispatchThunk_AcceptsLambdaDirectly()
+	{
+		var parent = new ThunkAction("ParentLambda", async api =>
+		{
+			await api.DispatchThunk(inner =>
+			{
+				inner.Dispatch(new UpdateFirstNameAction("NestedLambda"));
+				return Task.CompletedTask;
+			}).ToTask();
+		});
+
+		await _store.DispatchThunk(parent.Bind()).ToTask();
+		Assert.AreEqual("NestedLambda", _store.State.GetFeatureState<PersonState>().FirstName);
+	}
+
+	[TestMethod]
+	public async Task UnnamedThunk_RejectedActionName()
+	{
+		var ex = new InvalidOperationException("fail");
+		var thunk = new ThunkAction(_ => throw ex);
+
+		var rejected = await _store.DispatchThunk(thunk.Bind()).Actions.OfType<ThunkRejected>().Take(1).ToTask();
+		Assert.AreEqual("/rejected", rejected.ActionName);
+		Assert.AreSame(ex, rejected.Exception);
+	}
+
+	[TestMethod]
+	public async Task DispatchThunk_AcceptsMethodGroupWithArgs()
+	{
+		await _store.DispatchThunk(UpdateFirstName, "MethodGroup").ToTask();
+		Assert.AreEqual("MethodGroup", _store.State.GetFeatureState<PersonState>().FirstName);
+	}
+
+	[TestMethod]
+	public async Task DispatchThunk_AcceptsMethodGroupFuncWithArgs()
+	{
+		var result = await _store.DispatchThunk(JoinArgs, 3, "c").ToTask();
+		Assert.AreEqual("3:c", result);
+	}
+
+	[TestMethod]
+	public async Task DispatchThunk_AcceptsMultiArgLambdaDirectly()
+	{
+		int? capturedA = null;
+		string capturedB = null;
+
+		await _store.DispatchThunk((api, a, b) =>
+		{
+			capturedA = a;
+			capturedB = b;
+			api.Dispatch(new UpdateFirstNameAction($"{a}-{b}"));
+			return Task.CompletedTask;
+		}, 7, "x").ToTask();
+
+		Assert.AreEqual(7, capturedA);
+		Assert.AreEqual("x", capturedB);
+		Assert.AreEqual("7-x", _store.State.GetFeatureState<PersonState>().FirstName);
+	}
+
+	[TestMethod]
+	public async Task ThunkApi_DispatchThunk_AcceptsMethodGroupWithArgs()
+	{
+		var parent = new ThunkAction("ParentArgs", async api =>
+		{
+			await api.DispatchThunk(UpdateFirstName, "NestedMethodGroup").ToTask();
+			var joined = await api.DispatchThunk(JoinArgs, 1, "two").ToTask();
+			Assert.AreEqual("1:two", joined);
+		});
+
+		await _store.DispatchThunk(parent.Bind()).ToTask();
+		Assert.AreEqual("NestedMethodGroup", _store.State.GetFeatureState<PersonState>().FirstName);
+	}
+
+	private static Task UpdateFirstName(ThunkApi api, string firstName)
+	{
+		api.Dispatch(new UpdateFirstNameAction(firstName));
+		return Task.CompletedTask;
+	}
+
+	private static Task<string> JoinArgs(ThunkApi api, int a, string b) =>
+		Task.FromResult($"{a}:{b}");
 }

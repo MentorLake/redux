@@ -1,0 +1,74 @@
+<#@ template hostspecific="false" language="C#" #>
+<#@ output extension=".cs" #>
+<#@ import namespace="System" #>
+
+using MentorLake.Redux.Thunks;
+
+namespace MentorLake.Redux
+{
+	public sealed partial class ReduxStore
+	{
+<#
+	for (var i = 1; i <= 7; i++)
+	{
+		var typeArgs = Repeat(i, "TArg{i}");
+		var funcParams = "ThunkApi, " + Repeat(i, "TArg{i}");
+		var methodParams = Repeat(i, "TArg{i} arg{i}");
+		var args = Repeat(i, "arg{i}");
+#>
+		public ThunkResult DispatchThunk<<#=typeArgs#>>(Func<<#=funcParams#>, Task> work, <#=methodParams#>)
+		{
+			return DispatchThunk(new CallableThunkAction<<#=typeArgs#>>(string.Empty, work, <#=args#>));
+		}
+
+		public ThunkResult<TResult> DispatchThunk<<#=typeArgs#>, TResult>(Func<<#=funcParams#>, Task<TResult>> work, <#=methodParams#>)
+		{
+			return DispatchThunk(new CallableThunkFunc<<#=typeArgs#>, TResult>(string.Empty, work, <#=args#>));
+		}
+
+<#
+	}
+#>
+	}
+}
+
+namespace MentorLake.Redux.Thunks
+{
+	public partial class ThunkApi
+	{
+<#
+	for (var i = 1; i <= 7; i++)
+	{
+		var typeArgs = Repeat(i, "TArg{i}");
+		var funcParams = "ThunkApi, " + Repeat(i, "TArg{i}");
+		var methodParams = Repeat(i, "TArg{i} arg{i}");
+		var args = Repeat(i, "arg{i}");
+#>
+		public ThunkResult DispatchThunk<<#=typeArgs#>>(Func<<#=funcParams#>, Task> work, <#=methodParams#>)
+		{
+			return store.DispatchThunk(work, <#=args#>);
+		}
+
+		public ThunkResult<TResult> DispatchThunk<<#=typeArgs#>, TResult>(Func<<#=funcParams#>, Task<TResult>> work, <#=methodParams#>)
+		{
+			return store.DispatchThunk(work, <#=args#>);
+		}
+
+<#
+	}
+#>
+	}
+}
+<#+
+	private string Repeat(int num, string template, string separator = ", ")
+	{
+		var items = new string[num];
+
+		for (var i = 0; i < num; i++)
+		{
+			items[i] = template.Replace("{i}", (i + 1).ToString());
+		}
+
+		return string.Join(separator, items);
+	}
+#>

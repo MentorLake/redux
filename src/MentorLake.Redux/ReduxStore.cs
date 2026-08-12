@@ -7,7 +7,7 @@ using MentorLake.Redux.Thunks;
 
 namespace MentorLake.Redux;
 
-public sealed class ReduxStore
+public sealed partial class ReduxStore
 {
 	private readonly Subject<object> _actionDispatcher = new();
 	private readonly List<ActionReducer<StoreState>> _reducers = new();
@@ -36,6 +36,16 @@ public sealed class ReduxStore
 	public ThunkResult DispatchThunk(ICallableThunkAction thunk)
 	{
 		return new ThunkResult() { Actions = CreateThunkObservable(thunk) };
+	}
+
+	public ThunkResult DispatchThunk(Func<ThunkApi, Task> work)
+	{
+		return DispatchThunk(new CallableThunkAction(string.Empty, work));
+	}
+
+	public ThunkResult<TResult> DispatchThunk<TResult>(Func<ThunkApi, Task<TResult>> work)
+	{
+		return DispatchThunk(new CallableThunkFunc<TResult>(string.Empty, work));
 	}
 
 	private IObservable<object> CreateThunkObservable(ICallableThunkAction thunk)

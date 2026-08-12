@@ -116,6 +116,7 @@ store.RegisterEffects(serviceProvider.GetServices<IEffectsFactory>().ToArray());
 
 ## Thunks
 #### Defining
+Named thunks are useful when you want stable action names for reducers and subscribers (`Name/pending`, `Name/fulfilled`, `Name/rejected`):
 ```csharp
 public static class MyThunks
 {
@@ -129,11 +130,11 @@ public static class MyThunks
 
 	public static ThunkFunc<string> ThunkWithReturnValue = new(
 		"ThunkWithReturnValue",
-		(api) => Task.FromResult("Hello World"));
+		api => Task.FromResult("Hello World"));
 
 	public static ThunkFunc<int, string> ThunkWithArgAndReturnValue = new(
 		"ThunkWithArgAndReturnValue",
-		async (api, i) => Task.FromResult(i.ToString()));
+		(api, i) => Task.FromResult(i.ToString()));
 
 	public static ThunkAction ThunkUsingSelector = new(
 		"ThunkUsingSelector",
@@ -161,11 +162,64 @@ public static class MyThunks
 		});
 }
 ```
+
+Names are optional. Unnamed thunks still emit lifecycle actions using empty prefixes (`/pending`, `/fulfilled`, `/rejected`):
+```csharp
+// Construct without a name
+var delay = new ThunkAction(async api => await Task.Delay(100));
+var load = new ThunkFunc<int, string>((api, id) => Task.FromResult(id.ToString()));
+
+// Or assign from a Func via implicit conversion
+ThunkAction save = api =>
+{
+	api.Dispatch(new MyAction());
+	return Task.CompletedTask;
+};
+
+ThunkFunc<int, int> doubleIt = (api, value) => Task.FromResult(value * 2);
+```
+
 If you need dependency injection then declare your thunks as non-static in a non-static class.
 
 #### Usage
+Dispatch bound named thunks, or pass work directly as a lambda or method group (with optional args):
 ```csharp
-// Pending Action
+// Bound named thunk
+store.DispatchThunk(MyThunks.NoArgNoReturnThunk.Bind());
+
+// Lambda (no args)
+store.DispatchThunk(async api =>
+{
+	api.Dispatch(new MyAction());
+	await Task.Delay(100);
+});
+
+// Lambda with args
+store.DispatchThunk(async (api, userId) =>
+{
+	var user = await LoadUserAsync(userId);
+	api.Dispatch(new UserLoadedAction(user));
+}, 42);
+
+// Method group with args
+store.DispatchThunk(LoadUser, 42);
+
+// Nested dispatch from inside another thunk
+var parent = new ThunkAction("Parent", async api =>
+{
+	await api.DispatchThunk(async inner =>
+	{
+		inner.Dispatch(new MyAction());
+		await Task.CompletedTask;
+	}).ToTask();
+
+	var value = await api.DispatchThunk(MyThunks.ThunkWithReturnValue.Bind()).ToTask();
+});
+```
+
+Observe lifecycle and custom actions, or await the result as a task:
+```csharp
+// Pending action
 store.DispatchThunk(MyThunks.NoArgNoReturnThunk.Bind()).Actions
 	.Action<ThunkPending>("NoArgNoReturnThunk/pending")
 	.Subscribe(action =>
@@ -175,7 +229,7 @@ store.DispatchThunk(MyThunks.NoArgNoReturnThunk.Bind()).Actions
 
 // Fulfilled action
 store.DispatchThunk(MyThunks.ThunkWithArgAndReturnValue.Bind(123)).Actions
-	.Action<ThunkFulfilled<string>>("ThunkWithArgs/fulfilled")
+	.Action<ThunkFulfilled<string>>("ThunkWithArgAndReturnValue/fulfilled")
 	.Subscribe(action =>
 	{
 		Console.WriteLine($"Returned value: {action.Result}");
@@ -192,6 +246,9 @@ store.DispatchThunk(MyThunks.ThunkWithArgAndReturnValue.Bind(123)).Actions
 // Task
 var result = await store.DispatchThunk(MyThunks.ThunkWithArgAndReturnValue.Bind(123)).ToTask();
 Console.WriteLine($"Returned value: {result}");
+
+// Direct lambda as a task
+var greeting = await store.DispatchThunk(_ => Task.FromResult("Hello")).ToTask();
 ```
 
 #### Thunk Reducer

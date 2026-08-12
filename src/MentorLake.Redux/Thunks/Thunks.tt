@@ -6,14 +6,22 @@ namespace MentorLake.Redux.Thunks;
 
 public readonly struct ThunkAction(string actionName, Func<ThunkApi, Task> work)
 {
-	private readonly CallableThunkAction _thunk = new(actionName, work);
+	private readonly CallableThunkAction _thunk = new(actionName ?? string.Empty, work);
 	public CallableThunkAction Bind() => _thunk;
+
+	public ThunkAction(Func<ThunkApi, Task> work) : this(string.Empty, work) { }
+
+	public static implicit operator ThunkAction(Func<ThunkApi, Task> work) => new(work);
 }
 
 public readonly struct ThunkFunc<TResult>(string actionName, Func<ThunkApi, Task<TResult>> work)
 {
-	private readonly CallableThunkFunc<TResult> _thunk = new(actionName, work);
+	private readonly CallableThunkFunc<TResult> _thunk = new(actionName ?? string.Empty, work);
 	public CallableThunkFunc<TResult> Bind() => _thunk;
+
+	public ThunkFunc(Func<ThunkApi, Task<TResult>> work) : this(string.Empty, work) { }
+
+	public static implicit operator ThunkFunc<TResult>(Func<ThunkApi, Task<TResult>> work) => new(work);
 }
 
 public readonly struct CallableThunkAction(string actionName, Func<ThunkApi, Task> work) : ICallableThunkAction
@@ -31,6 +39,8 @@ public readonly struct CallableThunkAction(string actionName, Func<ThunkApi, Tas
 			api.Dispatch(new ThunkRejected(actionName, e));
 		}
 	}
+
+	public static implicit operator CallableThunkAction(Func<ThunkApi, Task> work) => new(string.Empty, work);
 }
 
 public readonly struct CallableThunkFunc<TResult>(string actionName, Func<ThunkApi, Task<TResult>> work) : ICallableThunkFunc<TResult>
@@ -48,6 +58,8 @@ public readonly struct CallableThunkFunc<TResult>(string actionName, Func<ThunkA
 			api.Dispatch(new ThunkRejected(actionName, e));
 		}
 	}
+
+	public static implicit operator CallableThunkFunc<TResult>(Func<ThunkApi, Task<TResult>> work) => new(string.Empty, work);
 }
 <#
 	for (var i = 1; i <= 7; i++)
@@ -56,12 +68,20 @@ public readonly struct CallableThunkFunc<TResult>(string actionName, Func<ThunkA
 
 public readonly struct ThunkAction<<#=Repeat(i, "TArg{i}")#>>(string actionName, Func<ThunkApi, <#=Repeat(i, "TArg{i}")#>, Task> work)
 {
-	public CallableThunkAction<<#=Repeat(i, "TArg{i}")#>> Bind(<#=Repeat(i, "TArg{i} arg{i}")#>) => new(actionName, work, <#=Repeat(i, "arg{i}")#>);
+	public ThunkAction(Func<ThunkApi, <#=Repeat(i, "TArg{i}")#>, Task> work) : this(string.Empty, work) { }
+
+	public CallableThunkAction<<#=Repeat(i, "TArg{i}")#>> Bind(<#=Repeat(i, "TArg{i} arg{i}")#>) => new(actionName ?? string.Empty, work, <#=Repeat(i, "arg{i}")#>);
+
+	public static implicit operator ThunkAction<<#=Repeat(i, "TArg{i}")#>>(Func<ThunkApi, <#=Repeat(i, "TArg{i}")#>, Task> work) => new(work);
 }
 
 public readonly struct ThunkFunc<<#=Repeat(i, "TArg{i}")#>, TResult>(string actionName, Func<ThunkApi, <#=Repeat(i, "TArg{i}")#>, Task<TResult>> work)
 {
-	public CallableThunkFunc<<#=Repeat(i, "TArg{i}")#>, TResult> Bind(<#=Repeat(i, "TArg{i} arg{i}")#>) => new(actionName, work, <#=Repeat(i, "arg{i}")#>);
+	public ThunkFunc(Func<ThunkApi, <#=Repeat(i, "TArg{i}")#>, Task<TResult>> work) : this(string.Empty, work) { }
+
+	public CallableThunkFunc<<#=Repeat(i, "TArg{i}")#>, TResult> Bind(<#=Repeat(i, "TArg{i} arg{i}")#>) => new(actionName ?? string.Empty, work, <#=Repeat(i, "arg{i}")#>);
+
+	public static implicit operator ThunkFunc<<#=Repeat(i, "TArg{i}")#>, TResult>(Func<ThunkApi, <#=Repeat(i, "TArg{i}")#>, Task<TResult>> work) => new(work);
 }
 
 public readonly struct CallableThunkAction<<#=Repeat(i, "TArg{i}")#>>(string actionName, Func<ThunkApi, <#=Repeat(i, "TArg{i}")#>, Task> work, <#=Repeat(i, "TArg{i} arg{i}")#>) : ICallableThunkAction
