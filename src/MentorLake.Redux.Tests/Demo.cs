@@ -22,25 +22,25 @@ public class TestException : Exception { }
 
 public static class TestThunks
 {
-	public static ThunkAction Test1 = new("Test1", _ => Task.CompletedTask);
-	public static ThunkAction Test2 = new("Test2", _ => throw new TestException());
-	public static ThunkFunc<string> Test3 = new("Test3", _ => Task.FromResult("Hello"));
-	public static ThunkFunc<string, string> Test4 = new("Test4", (_, arg) => Task.FromResult(arg));
-	public static ThunkAction<Exception> Test5 = new("Test5", (_, arg) => throw arg);
-	public static ThunkAction Test6 = new("Test6", _ => Task.CompletedTask);
-	public static ThunkFunc<string, string> TestLiveState = new("TestLiveState", (api, newName) =>
+	public static ThunkAction<ThunkApi> Test1 = new("Test1", _ => Task.CompletedTask);
+	public static ThunkAction<ThunkApi> Test2 = new("Test2", _ => throw new TestException());
+	public static ThunkFunc<ThunkApi, string> Test3 = new("Test3", _ => Task.FromResult("Hello"));
+	public static ThunkFunc<ThunkApi, string, string> Test4 = new("Test4", (_, arg) => Task.FromResult(arg));
+	public static ThunkAction<ThunkApi, Exception> Test5 = new("Test5", (_, arg) => throw arg);
+	public static ThunkAction<ThunkApi> Test6 = new("Test6", _ => Task.CompletedTask);
+	public static ThunkFunc<ThunkApi, string, string> TestLiveState = new("TestLiveState", (api, newName) =>
 	{
 		var before = MySelectors.FirstName.Apply(api.State);
 		api.Dispatch(new UpdateFirstNameAction(newName));
 		var after = MySelectors.FirstName.Apply(api.State);
 		return Task.FromResult($"{before}->{after}");
 	});
-	public static ThunkFunc<string, string> TestNestedThunk = new("TestNestedThunk", async (api, name) =>
+	public static ThunkFunc<ThunkApi, string, string> TestNestedThunk = new("TestNestedThunk", async (api, name) =>
 	{
 		var nestedResult = await api.DispatchThunk(Test4.Bind(name)).ToTask();
 		return $"nested:{nestedResult}";
 	});
-	public static ThunkAction TestNestedThunkAction = new("TestNestedThunkAction", async api =>
+	public static ThunkAction<ThunkApi> TestNestedThunkAction = new("TestNestedThunkAction", async api =>
 	{
 		await api.DispatchThunk(Test6.Bind()).ToTask();
 	});

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
 using MentorLake.Redux.Effects;
@@ -12,6 +13,10 @@ public sealed partial class ReduxStore
 	private readonly Subject<object> _actionDispatcher = new();
 	private readonly List<ActionReducer<StoreState>> _reducers = new();
 	private readonly BehaviorSubject<StoreState> _stateSubject;
+	private readonly Dictionary<Type, Func<ThunkApiContext, ThunkApi>> _thunkApiFactories = new()
+	{
+		[typeof(ThunkApi)] = static ctx => new ThunkApi(ctx)
+	};
 
 	public ReduxStore()
 	{
@@ -22,38 +27,40 @@ public sealed partial class ReduxStore
 	public StoreState State { get; private set; }
 	public IObservable<object> Actions => _actionDispatcher;
 
+	public void UseThunkApi<TApi>(Func<ThunkApiContext, TApi> factory) where TApi : ThunkApi
+	{
+		ArgumentNullException.ThrowIfNull(factory);
+		_thunkApiFactories[typeof(TApi)] = ctx => factory(ctx);
+	}
+
+	public ThunkDispatcher<TApi> Using<TApi>() where TApi : ThunkApi
+	{
+		return new ThunkDispatcher<TApi>(this);
+	}
+
 	public void Dispatch(object action)
 	{
 		if (action == null) return;
+		Debug.WriteLine($"Dispatching action: {action.GetType().Name}");
 		ProcessActionQueue(action);
 	}
 
-	public ThunkResult<TResult> DispatchThunk<TResult>(ICallableThunkFunc<TResult> thunk)
+	public ThunkResult DispatchThunk<TApi>(ICallableThunkAction<TApi> thunk) where TApi : ThunkApi
 	{
-		return new ThunkResult<TResult>() { Actions = CreateThunkObservable(thunk) };
+		return new ThunkResult { Actions = CreateThunkObservable(thunk) };
 	}
 
-	public ThunkResult DispatchThunk(ICallableThunkAction thunk)
+	public ThunkResult<TResult> DispatchThunk<TApi, TResult>(ICallableThunkFunc<TApi, TResult> thunk) where TApi : ThunkApi
 	{
-		return new ThunkResult() { Actions = CreateThunkObservable(thunk) };
+		return new ThunkResult<TResult> { Actions = CreateThunkObservable(thunk) };
 	}
 
-	public ThunkResult DispatchThunk(Func<ThunkApi, Task> work)
-	{
-		return DispatchThunk(new CallableThunkAction(string.Empty, work));
-	}
-
-	public ThunkResult<TResult> DispatchThunk<TResult>(Func<ThunkApi, Task<TResult>> work)
-	{
-		return DispatchThunk(new CallableThunkFunc<TResult>(string.Empty, work));
-	}
-
-	private IObservable<object> CreateThunkObservable(ICallableThunkAction thunk)
+	private IObservable<object> CreateThunkObservable<TApi>(ICallableThunkAction<TApi> thunk, TApi api = null) where TApi : ThunkApi
 	{
 		return Observable.Create<object>(observer =>
 		{
 			var localActionDispatcher = new Subject<object>();
-			var api = new ThunkApi(localActionDispatcher, this);
+			api ??= CreateThunkApi<TApi>(localActionDispatcher);
 
 			var subscription = localActionDispatcher
 				.Do(Dispatch)
@@ -63,6 +70,19 @@ public sealed partial class ReduxStore
 			_ = thunk.ExecuteAsync(api);
 			return subscription;
 		});
+	}
+
+	private TApi CreateThunkApi<TApi>(Subject<object> actionDispatcher) where TApi : ThunkApi
+	{
+		var context = new ThunkApiContext(actionDispatcher, this);
+		var apiType = typeof(TApi);
+
+		if (_thunkApiFactories.TryGetValue(apiType, out var factory))
+		{
+			return (TApi)factory(context);
+		}
+
+		throw new InvalidOperationException($"No factory registered for {apiType.FullName}");
 	}
 
 	private void ProcessActionQueue(object action)

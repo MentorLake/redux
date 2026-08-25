@@ -4,6 +4,11 @@ namespace MentorLake.Redux.Thunks;
 
 public partial class ThunkApi(Subject<object> actionDispatcher, ReduxStore store)
 {
+	public ThunkApi(ThunkApiContext context)
+		: this(context.ActionDispatcher, context.Store)
+	{
+	}
+
 	public StoreState State => store.State;
 
 	public void Dispatch(object action)
@@ -11,23 +16,8 @@ public partial class ThunkApi(Subject<object> actionDispatcher, ReduxStore store
 		actionDispatcher.OnNext(action);
 	}
 
-	public ThunkResult DispatchThunk(ICallableThunkAction thunk)
+	public ThunkDispatcher<TApi> Using<TApi>() where TApi : ThunkApi
 	{
-		return store.DispatchThunk(thunk);
-	}
-
-	public ThunkResult<TResult> DispatchThunk<TResult>(ICallableThunkFunc<TResult> thunk)
-	{
-		return store.DispatchThunk(thunk);
-	}
-
-	public ThunkResult DispatchThunk(Func<ThunkApi, Task> work)
-	{
-		return store.DispatchThunk(work);
-	}
-
-	public ThunkResult<TResult> DispatchThunk<TResult>(Func<ThunkApi, Task<TResult>> work)
-	{
-		return store.DispatchThunk(work);
+		return store.Using<TApi>();
 	}
 }

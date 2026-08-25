@@ -27,7 +27,7 @@ public class ThunkTests
 		int? capturedA = null;
 		string capturedB = null;
 
-		var thunk = new ThunkAction<int, string>("MultiArg", (api, a, b) =>
+		var thunk = new ThunkAction<ThunkApi, int, string>("MultiArg", (api, a, b) =>
 		{
 			capturedA = a;
 			capturedB = b;
@@ -44,7 +44,7 @@ public class ThunkTests
 	[TestMethod]
 	public async Task MultiArgThunkFunc_ReturnsProjectedResult()
 	{
-		var thunk = new ThunkFunc<int, string, string>("Join", (api, a, b) =>
+		var thunk = new ThunkFunc<ThunkApi, int, string, string>("Join", (api, a, b) =>
 			Task.FromResult($"{a}:{b}"));
 
 		var result = await _store.DispatchThunk(thunk.Bind(1, "two")).ToTask();
@@ -54,21 +54,23 @@ public class ThunkTests
 	[TestMethod]
 	public async Task LifecycleActions_UseExpectedNames()
 	{
-		var thunk = new ThunkAction("NamedJob", _ => Task.CompletedTask);
-		var result = _store.DispatchThunk(thunk.Bind());
+		var thunk = new ThunkAction<ThunkApi>("NamedJob", _ => Task.CompletedTask);
+		var thunkDispatch = _store.DispatchThunk(thunk.Bind());
+		var actions = thunkDispatch.Actions.Publish();
+		var pending = actions.OfType<ThunkPending>().Take(1).ToTask();
+		var fulfilled = actions.OfType<ThunkFulfilled>().Take(1).ToTask();
+		actions.Connect();
+		Task.WaitAll([pending, fulfilled], 1000);
 
-		var pending = await result.Actions.OfType<ThunkPending>().Take(1).ToTask();
-		var fulfilled = await result.Actions.OfType<ThunkFulfilled>().Take(1).ToTask();
-
-		Assert.AreEqual("NamedJob/pending", pending.ActionName);
-		Assert.AreEqual("NamedJob/fulfilled", fulfilled.ActionName);
+		Assert.AreEqual("NamedJob/pending", pending.Result.ActionName);
+		Assert.AreEqual("NamedJob/fulfilled", fulfilled.Result.ActionName);
 	}
 
 	[TestMethod]
 	public async Task RejectedAction_UsesExpectedNameAndException()
 	{
 		var ex = new InvalidOperationException("boom");
-		var thunk = new ThunkAction("FailJob", _ => throw ex);
+		var thunk = new ThunkAction<ThunkApi>("FailJob", _ => throw ex);
 		var result = _store.DispatchThunk(thunk.Bind());
 
 		var rejected = await result.Actions.OfType<ThunkRejected>().Take(1).ToTask();
@@ -80,15 +82,15 @@ public class ThunkTests
 	[ExpectedException(typeof(TestException))]
 	public async Task ThunkFunc_ToTask_RethrowsRejectedException()
 	{
-		var thunk = new ThunkFunc<string>("FailFunc", _ => throw new TestException());
+		var thunk = new ThunkFunc<ThunkApi, string>("FailFunc", _ => throw new TestException());
 		await _store.DispatchThunk(thunk.Bind()).ToTask();
 	}
 
 	[TestMethod]
 	public async Task NestedThunkRejection_SurfacesWhenAwaited()
 	{
-		var nested = new ThunkAction("NestedFail", _ => throw new TestException());
-		var parent = new ThunkAction("Parent", async api =>
+		var nested = new ThunkAction<ThunkApi>("NestedFail", _ => throw new TestException());
+		var parent = new ThunkAction<ThunkApi>("Parent", async api =>
 		{
 			await api.DispatchThunk(nested.Bind()).ToTask();
 		});
@@ -107,8 +109,8 @@ public class ThunkTests
 	[TestMethod]
 	public async Task NestedThunk_DoesNotCompleteParentEarly()
 	{
-		var nested = new ThunkFunc<string>("NestedOk", _ => Task.FromResult("child"));
-		var parent = new ThunkFunc<string>("ParentOk", async api =>
+		var nested = new ThunkFunc<ThunkApi, string>("NestedOk", _ => Task.FromResult("child"));
+		var parent = new ThunkFunc<ThunkApi, string>("ParentOk", async api =>
 		{
 			var child = await api.DispatchThunk(nested.Bind()).ToTask();
 			return $"parent:{child}";
@@ -128,7 +130,7 @@ public class ThunkTests
 			.ToArray()
 			.ToTask();
 
-		var thunk = new ThunkAction("StoreVisible", _ => Task.CompletedTask);
+		var thunk = new ThunkAction<ThunkApi>("StoreVisible", _ => Task.CompletedTask);
 		await _store.DispatchThunk(thunk.Bind()).ToTask();
 
 		var actions = await storeActionsTask;
@@ -139,7 +141,7 @@ public class ThunkTests
 	[TestMethod]
 	public async Task ThunkCanDispatchRegularActions()
 	{
-		var thunk = new ThunkAction("DispatchRegular", api =>
+		var thunk = new ThunkAction<ThunkApi>("DispatchRegular", api =>
 		{
 			api.Dispatch(new UpdateFirstNameAction("FromThunk"));
 			return Task.CompletedTask;
@@ -153,25 +155,28 @@ public class ThunkTests
 	public async Task ThunkAction_CanBeCreatedWithoutName()
 	{
 		var ran = false;
-		var thunk = new ThunkAction(_ =>
+		var thunk = new ThunkAction<ThunkApi>(_ =>
 		{
 			ran = true;
 			return Task.CompletedTask;
 		});
 
-		var result = _store.DispatchThunk(thunk.Bind());
-		var pending = await result.Actions.OfType<ThunkPending>().Take(1).ToTask();
-		var fulfilled = await result.Actions.OfType<ThunkFulfilled>().Take(1).ToTask();
+		var thunkDispatch = _store.DispatchThunk(thunk.Bind());
+		var actions = thunkDispatch.Actions.Publish();
+		var pending = actions.OfType<ThunkPending>().Take(1).ToTask();
+		var fulfilled = actions.OfType<ThunkFulfilled>().Take(1).ToTask();
+		actions.Connect();
+		Task.WaitAll([pending, fulfilled], 1000);
 
 		Assert.IsTrue(ran);
-		Assert.AreEqual("/pending", pending.ActionName);
-		Assert.AreEqual("/fulfilled", fulfilled.ActionName);
+		Assert.AreEqual("/pending", pending.Result.ActionName);
+		Assert.AreEqual("/fulfilled", fulfilled.Result.ActionName);
 	}
 
 	[TestMethod]
 	public async Task ThunkFunc_CanBeCreatedWithoutName()
 	{
-		var thunk = new ThunkFunc<string>(_ => Task.FromResult("ok"));
+		var thunk = new ThunkFunc<ThunkApi, string>(_ => Task.FromResult("ok"));
 
 		var result = await _store.DispatchThunk(thunk.Bind()).ToTask();
 		Assert.AreEqual("ok", result);
@@ -181,7 +186,7 @@ public class ThunkTests
 	public async Task MultiArgThunkAction_CanBeCreatedWithoutName()
 	{
 		int? captured = null;
-		var thunk = new ThunkAction<int>((_, value) =>
+		var thunk = new ThunkAction<ThunkApi, int>((_, value) =>
 		{
 			captured = value;
 			return Task.CompletedTask;
@@ -194,7 +199,7 @@ public class ThunkTests
 	[TestMethod]
 	public async Task MultiArgThunkFunc_CanBeCreatedWithoutName()
 	{
-		var thunk = new ThunkFunc<int, string, string>((_, a, b) => Task.FromResult($"{a}-{b}"));
+		var thunk = new ThunkFunc<ThunkApi, int, string, string>((_, a, b) => Task.FromResult($"{a}-{b}"));
 
 		var result = await _store.DispatchThunk(thunk.Bind(3, "c")).ToTask();
 		Assert.AreEqual("3-c", result);
@@ -209,7 +214,7 @@ public class ThunkTests
 			return Task.CompletedTask;
 		};
 
-		ThunkAction thunk = work;
+		ThunkAction<ThunkApi> thunk = work;
 		await _store.DispatchThunk(thunk.Bind()).ToTask();
 		Assert.AreEqual("Implicit", _store.State.GetFeatureState<PersonState>().FirstName);
 	}
@@ -219,7 +224,7 @@ public class ThunkTests
 	{
 		Func<ThunkApi, Task<int>> work = _ => Task.FromResult(99);
 
-		ThunkFunc<int> thunk = work;
+		ThunkFunc<ThunkApi, int> thunk = work;
 		var result = await _store.DispatchThunk(thunk.Bind()).ToTask();
 		Assert.AreEqual(99, result);
 	}
@@ -234,7 +239,7 @@ public class ThunkTests
 			return Task.CompletedTask;
 		};
 
-		ThunkAction<string> thunk = work;
+		ThunkAction<ThunkApi, string> thunk = work;
 		await _store.DispatchThunk(thunk.Bind("bound")).ToTask();
 		Assert.AreEqual("bound", captured);
 	}
@@ -244,7 +249,7 @@ public class ThunkTests
 	{
 		Func<ThunkApi, int, int, Task<int>> work = (_, a, b) => Task.FromResult(a + b);
 
-		ThunkFunc<int, int, int> thunk = work;
+		ThunkFunc<ThunkApi, int, int, int> thunk = work;
 		var result = await _store.DispatchThunk(thunk.Bind(4, 5)).ToTask();
 		Assert.AreEqual(9, result);
 	}
@@ -258,7 +263,7 @@ public class ThunkTests
 			return Task.CompletedTask;
 		};
 
-		CallableThunkAction callable = work;
+		CallableThunkAction<ThunkApi> callable = work;
 		await _store.DispatchThunk(callable).ToTask();
 		Assert.AreEqual("CallableImplicit", _store.State.GetFeatureState<PersonState>().FirstName);
 	}
@@ -266,7 +271,7 @@ public class ThunkTests
 	[TestMethod]
 	public async Task DispatchThunk_AcceptsLambdaDirectly()
 	{
-		await _store.DispatchThunk(api =>
+		await _store.DispatchThunk((ThunkApi api)=>
 		{
 			api.Dispatch(new UpdateFirstNameAction("DirectLambda"));
 			return Task.CompletedTask;
@@ -278,14 +283,14 @@ public class ThunkTests
 	[TestMethod]
 	public async Task DispatchThunk_AcceptsLambdaFuncDirectly()
 	{
-		var result = await _store.DispatchThunk(_ => Task.FromResult("from-lambda")).ToTask();
+		var result = await _store.DispatchThunk((ThunkApi _) => Task.FromResult("from-lambda")).ToTask();
 		Assert.AreEqual("from-lambda", result);
 	}
 
 	[TestMethod]
 	public async Task ThunkApi_DispatchThunk_AcceptsLambdaDirectly()
 	{
-		var parent = new ThunkAction("ParentLambda", async api =>
+		var parent = new ThunkAction<ThunkApi>("ParentLambda", async api =>
 		{
 			await api.DispatchThunk(inner =>
 			{
@@ -302,11 +307,33 @@ public class ThunkTests
 	public async Task UnnamedThunk_RejectedActionName()
 	{
 		var ex = new InvalidOperationException("fail");
-		var thunk = new ThunkAction(_ => throw ex);
+		var thunk = new ThunkAction<ThunkApi>(_ => throw ex);
 
 		var rejected = await _store.DispatchThunk(thunk.Bind()).Actions.OfType<ThunkRejected>().Take(1).ToTask();
 		Assert.AreEqual("/rejected", rejected.ActionName);
 		Assert.AreSame(ex, rejected.Exception);
+	}
+
+	[TestMethod]
+	public async Task DispatchThunk_AcceptsNamedWrapperWithoutBind()
+	{
+		var thunk = new ThunkAction<ThunkApi>("NoBind", api =>
+		{
+			api.Dispatch(new UpdateFirstNameAction("NoBind"));
+			return Task.CompletedTask;
+		});
+
+		var pending = await _store.DispatchThunk(thunk).Actions.OfType<ThunkPending>().Take(1).ToTask();
+		Assert.AreEqual("NoBind/pending", pending.ActionName);
+		Assert.AreEqual("NoBind", _store.State.GetFeatureState<PersonState>().FirstName);
+	}
+
+	[TestMethod]
+	public async Task DispatchThunk_AcceptsMultiArgNamedWrapperWithoutBind()
+	{
+		var thunk = new ThunkFunc<ThunkApi, int, string, string>("JoinNoBind", (_, a, b) => Task.FromResult($"{a}:{b}"));
+		var result = await _store.DispatchThunk(thunk, 2, "b").ToTask();
+		Assert.AreEqual("2:b", result);
 	}
 
 	[TestMethod]
@@ -329,7 +356,7 @@ public class ThunkTests
 		int? capturedA = null;
 		string capturedB = null;
 
-		await _store.DispatchThunk((api, a, b) =>
+		await _store.DispatchThunk((ThunkApi api, int? a, string b) =>
 		{
 			capturedA = a;
 			capturedB = b;
@@ -345,7 +372,7 @@ public class ThunkTests
 	[TestMethod]
 	public async Task ThunkApi_DispatchThunk_AcceptsMethodGroupWithArgs()
 	{
-		var parent = new ThunkAction("ParentArgs", async api =>
+		var parent = new ThunkAction<ThunkApi>("ParentArgs", async api =>
 		{
 			await api.DispatchThunk(UpdateFirstName, "NestedMethodGroup").ToTask();
 			var joined = await api.DispatchThunk(JoinArgs, 1, "two").ToTask();

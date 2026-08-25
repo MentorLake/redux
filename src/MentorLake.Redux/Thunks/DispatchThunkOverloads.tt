@@ -8,6 +8,26 @@ namespace MentorLake.Redux
 {
 	public sealed partial class ReduxStore
 	{
+		public ThunkResult DispatchThunk(ThunkAction<ThunkApi> thunk)
+		{
+			return DispatchThunk(thunk.Bind());
+		}
+
+		public ThunkResult DispatchThunk(Func<ThunkApi, Task> thunk)
+		{
+			return DispatchThunk(new ThunkAction<ThunkApi>(string.Empty, thunk).Bind());
+		}
+
+		public ThunkResult<TResult> DispatchThunk<TResult>(ThunkFunc<ThunkApi, TResult> thunk)
+		{
+			return DispatchThunk(thunk.Bind());
+		}
+
+		public ThunkResult<TResult> DispatchThunk<TResult>(Func<ThunkApi, Task<TResult>> thunk)
+		{
+			return DispatchThunk(new ThunkFunc<ThunkApi, TResult>(string.Empty, thunk).Bind());
+		}
+
 <#
 	for (var i = 1; i <= 7; i++)
 	{
@@ -18,14 +38,23 @@ namespace MentorLake.Redux
 #>
 		public ThunkResult DispatchThunk<<#=typeArgs#>>(Func<<#=funcParams#>, Task> work, <#=methodParams#>)
 		{
-			return DispatchThunk(new CallableThunkAction<<#=typeArgs#>>(string.Empty, work, <#=args#>));
+			return DispatchThunk(new ThunkAction<<#=funcParams#>>(string.Empty, work).Bind(<#=args#>));
 		}
 
 		public ThunkResult<TResult> DispatchThunk<<#=typeArgs#>, TResult>(Func<<#=funcParams#>, Task<TResult>> work, <#=methodParams#>)
 		{
-			return DispatchThunk(new CallableThunkFunc<<#=typeArgs#>, TResult>(string.Empty, work, <#=args#>));
+			return DispatchThunk(new ThunkFunc<<#=funcParams#>, TResult>(string.Empty, work).Bind(<#=args#>));
 		}
 
+		public ThunkResult DispatchThunk<<#=typeArgs#>>(ThunkAction<<#=funcParams#>> thunk, <#=methodParams#>)
+		{
+			return DispatchThunk(thunk.Bind(<#=args#>));
+		}
+
+		public ThunkResult<TResult> DispatchThunk<<#=typeArgs#>, TResult>(ThunkFunc<<#=funcParams#>, TResult> thunk, <#=methodParams#>)
+		{
+			return DispatchThunk(thunk.Bind(<#=args#>));
+		}
 <#
 	}
 #>
@@ -36,6 +65,36 @@ namespace MentorLake.Redux.Thunks
 {
 	public partial class ThunkApi
 	{
+		public ThunkResult DispatchThunk<TApi>(ICallableThunkAction<TApi> thunk) where TApi : ThunkApi
+		{
+			return store.DispatchThunk(thunk);
+		}
+
+		public ThunkResult<TResult> DispatchThunk<TApi, TResult>(ICallableThunkFunc<TApi, TResult> thunk) where TApi : ThunkApi
+		{
+			return store.DispatchThunk(thunk);
+		}
+
+		public ThunkResult DispatchThunk(ThunkAction<ThunkApi> thunk)
+		{
+			return Using<ThunkApi>().Dispatch(thunk);
+		}
+
+		public ThunkResult DispatchThunk(Func<ThunkApi, Task> thunk)
+		{
+			return Using<ThunkApi>().Dispatch(new ThunkAction<ThunkApi>(string.Empty, thunk));
+		}
+
+		public ThunkResult<TResult> DispatchThunk<TResult>(ThunkFunc<ThunkApi, TResult> thunk)
+		{
+			return Using<ThunkApi>().Dispatch(thunk);
+		}
+
+		public ThunkResult<TResult> DispatchThunk<TResult>(Func<ThunkApi, Task<TResult>> thunk)
+		{
+			return Using<ThunkApi>().Dispatch(new ThunkFunc<ThunkApi, TResult>(string.Empty, thunk));
+		}
+
 <#
 	for (var i = 1; i <= 7; i++)
 	{
@@ -46,14 +105,76 @@ namespace MentorLake.Redux.Thunks
 #>
 		public ThunkResult DispatchThunk<<#=typeArgs#>>(Func<<#=funcParams#>, Task> work, <#=methodParams#>)
 		{
-			return store.DispatchThunk(work, <#=args#>);
+			return Using<ThunkApi>().Dispatch(work, <#=args#>);
 		}
 
 		public ThunkResult<TResult> DispatchThunk<<#=typeArgs#>, TResult>(Func<<#=funcParams#>, Task<TResult>> work, <#=methodParams#>)
 		{
-			return store.DispatchThunk(work, <#=args#>);
+			return Using<ThunkApi>().Dispatch(work, <#=args#>);
 		}
 
+		public ThunkResult DispatchThunk<<#=typeArgs#>>(ThunkAction<<#=funcParams#>> thunk, <#=methodParams#>)
+		{
+			return Using<ThunkApi>().Dispatch(thunk, <#=args#>);
+		}
+
+		public ThunkResult<TResult> DispatchThunk<<#=typeArgs#>, TResult>(ThunkFunc<<#=funcParams#>, TResult> thunk, <#=methodParams#>)
+		{
+			return Using<ThunkApi>().Dispatch(thunk, <#=args#>);
+		}
+<#
+	}
+#>
+	}
+
+	public sealed partial class ThunkDispatcher<TApi> where TApi : ThunkApi
+	{
+		public ThunkResult Dispatch(CallableThunkAction<TApi> thunk) => _store.DispatchThunk(thunk);
+		public ThunkResult Dispatch(ThunkAction<TApi> thunk) => Dispatch(thunk.Bind());
+		public ThunkResult Dispatch(string actionName, Func<TApi, Task> work) => Dispatch(new ThunkAction<TApi>(actionName ?? string.Empty, work).Bind());
+		public ThunkResult Dispatch(Func<TApi, Task> work) => Dispatch(string.Empty, work);
+
+		public ThunkResult<TResult> Dispatch<TResult>(CallableThunkFunc<TApi, TResult> thunk) => _store.DispatchThunk(thunk);
+		public ThunkResult<TResult> Dispatch<TResult>(ThunkFunc<TApi, TResult> thunk) => Dispatch(thunk.Bind());
+		public ThunkResult<TResult> Dispatch<TResult>(string actionName, Func<TApi, Task<TResult>> work) => Dispatch(new ThunkFunc<TApi, TResult>(actionName ?? string.Empty, work));
+		public ThunkResult<TResult> Dispatch<TResult>(Func<TApi, Task<TResult>> work) => Dispatch(string.Empty, work);
+<#
+	for (var i = 1; i <= 7; i++)
+	{
+		var typeArgs = Repeat(i, "TArg{i}");
+		var funcParams = "TApi, " + Repeat(i, "TArg{i}");
+		var methodParams = Repeat(i, "TArg{i} arg{i}");
+		var args = Repeat(i, "arg{i}");
+#>
+		public ThunkResult Dispatch<<#=typeArgs#>>(ThunkAction<<#=funcParams#>> thunk, <#=methodParams#>)
+		{
+			return _store.DispatchThunk(thunk.Bind(<#=args#>));
+		}
+
+		public ThunkResult Dispatch<<#=typeArgs#>>(Func<<#=funcParams#>, Task> work, <#=methodParams#>)
+		{
+			return Dispatch(string.Empty, work, <#=args#>);
+		}
+
+		public ThunkResult Dispatch<<#=typeArgs#>>(string actionName, Func<<#=funcParams#>, Task> work, <#=methodParams#>)
+		{
+			return _store.DispatchThunk(new ThunkAction<<#=funcParams#>>(actionName, work).Bind(<#=args#>));
+		}
+
+		public ThunkResult<TResult> Dispatch<<#=typeArgs#>, TResult>(ThunkFunc<<#=funcParams#>, TResult> thunk, <#=methodParams#>)
+		{
+			return _store.DispatchThunk(thunk.Bind(<#=args#>));
+		}
+
+		public ThunkResult<TResult> Dispatch<<#=typeArgs#>, TResult>(Func<<#=funcParams#>, Task<TResult>> work, <#=methodParams#>)
+		{
+			return Dispatch(string.Empty, work, <#=args#>);
+		}
+
+		public ThunkResult<TResult> Dispatch<<#=typeArgs#>, TResult>(string actionName, Func<<#=funcParams#>, Task<TResult>> work, <#=methodParams#>)
+		{
+			return _store.DispatchThunk(new ThunkFunc<<#=funcParams#>, TResult>(actionName, work).Bind(<#=args#>));
+		}
 <#
 	}
 #>

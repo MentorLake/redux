@@ -1,11 +1,11 @@
 namespace MentorLake.Redux.Thunks;
 
-public interface ICallableThunkAction
+public interface ICallableThunkAction<TApi> where TApi : ThunkApi
 {
-	public Task ExecuteAsync(ThunkApi api);
+	Task ExecuteAsync(TApi api);
 }
 
-public interface ICallableThunkFunc<TResult> : ICallableThunkAction
+public interface ICallableThunkFunc<TApi, TResult> : ICallableThunkAction<TApi> where TApi : ThunkApi
 {
 
 }
