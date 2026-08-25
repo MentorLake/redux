@@ -269,7 +269,7 @@ var greeting = await store.DispatchThunk(_ => Task.FromResult("Hello")).ToTask()
 
 #### Custom ThunkApi
 
-Subclass `ThunkApi` when thunks need extra dependencies or helpers. Register a factory with `UseThunkApi`, then dispatch through `Using<TApi>()`, which returns a `ThunkDispatcher<TApi>`.
+Subclass `ThunkApi` when thunks need extra dependencies or helpers. Register a factory with `RegisterThunkApiFactory`, then dispatch through `Using<TApi>()`, which returns a `ThunkDispatcher<TApi>`.
 
 ```csharp
 public class AppThunkApi : ThunkApi
@@ -283,7 +283,7 @@ public class AppThunkApi : ThunkApi
 }
 
 // Required before Using<AppThunkApi>() — missing factories throw InvalidOperationException
-store.UseThunkApi(ctx => new AppThunkApi(ctx, userService));
+store.RegisterThunkApiFactory(ctx => new AppThunkApi(ctx, userService));
 ```
 
 Define thunks as ordinary methods, lambdas, or typed wrappers against the custom API (optionally cache the dispatcher):

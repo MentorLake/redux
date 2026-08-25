@@ -4,9 +4,19 @@
 
 namespace MentorLake.Redux.Thunks;
 
+<#
+	var sharedProperties = """
+public string ActionName => actionName ?? string.Empty;
+	public string PendingName => $"{actionName}/pending";
+	public string FulfilledName => $"{actionName}/fulfilled";
+	public string RejectedName => $"{actionName}/rejected";
+""";
+#>
+
 public readonly struct ThunkAction<TApi>(string actionName, Func<TApi, Task> work) where TApi : ThunkApi
 {
-	private readonly CallableThunkAction<TApi> _thunk = new(actionName ?? string.Empty, work);
+	<#=sharedProperties#>
+	private readonly CallableThunkAction<TApi> _thunk = new(ActionName ?? string.Empty, work);
 	public CallableThunkAction<TApi> Bind() => _thunk;
 	public ThunkAction(Func<TApi, Task> work) : this(string.Empty, work) { }
 	public static implicit operator ThunkAction<TApi>(Func<TApi, Task> work) => new(work);
@@ -14,7 +24,8 @@ public readonly struct ThunkAction<TApi>(string actionName, Func<TApi, Task> wor
 
 public readonly struct ThunkFunc<TApi,TResult>(string actionName, Func<TApi, Task<TResult>> work) where TApi : ThunkApi
 {
-	private readonly CallableThunkFunc<TApi, TResult> _thunk = new(actionName ?? string.Empty, work);
+	<#=sharedProperties#>
+	private readonly CallableThunkFunc<TApi, TResult> _thunk = new(ActionName ?? string.Empty, work);
 	public CallableThunkFunc<TApi, TResult> Bind() => _thunk;
 	public ThunkFunc(Func<TApi, Task<TResult>> work) : this(string.Empty, work) { }
 	public static implicit operator ThunkFunc<TApi, TResult>(Func<TApi, Task<TResult>> work) => new(work);
@@ -64,15 +75,17 @@ public readonly struct CallableThunkFunc<TApi, TResult>(string actionName, Func<
 
 public readonly struct ThunkAction<TApi, <#=Repeat(i, "TArg{i}")#>>(string actionName, Func<TApi, <#=Repeat(i, "TArg{i}")#>, Task> work) where TApi : ThunkApi
 {
+	<#=sharedProperties#>
 	public ThunkAction(Func<TApi, <#=Repeat(i, "TArg{i}")#>, Task> work) : this(string.Empty, work) { }
-	public CallableThunkAction<TApi, <#=Repeat(i, "TArg{i}")#>> Bind(<#=Repeat(i, "TArg{i} arg{i}")#>) => new(actionName ?? string.Empty, work, <#=Repeat(i, "arg{i}")#>);
+	public CallableThunkAction<TApi, <#=Repeat(i, "TArg{i}")#>> Bind(<#=Repeat(i, "TArg{i} arg{i}")#>) => new(ActionName, work, <#=Repeat(i, "arg{i}")#>);
 	public static implicit operator ThunkAction<TApi, <#=Repeat(i, "TArg{i}")#>>(Func<TApi, <#=Repeat(i, "TArg{i}")#>, Task> work) => new(work);
 }
 
 public readonly struct ThunkFunc<TApi, <#=Repeat(i, "TArg{i}")#>, TResult>(string actionName, Func<TApi, <#=Repeat(i, "TArg{i}")#>, Task<TResult>> work) where TApi : ThunkApi
 {
+	<#=sharedProperties#>
 	public ThunkFunc(Func<TApi, <#=Repeat(i, "TArg{i}")#>, Task<TResult>> work) : this(string.Empty, work) { }
-	public CallableThunkFunc<TApi, <#=Repeat(i, "TArg{i}")#>, TResult> Bind(<#=Repeat(i, "TArg{i} arg{i}")#>) => new(actionName ?? string.Empty, work, <#=Repeat(i, "arg{i}")#>);
+	public CallableThunkFunc<TApi, <#=Repeat(i, "TArg{i}")#>, TResult> Bind(<#=Repeat(i, "TArg{i} arg{i}")#>) => new(ActionName, work, <#=Repeat(i, "arg{i}")#>);
 	public static implicit operator ThunkFunc<TApi, <#=Repeat(i, "TArg{i}")#>, TResult>(Func<TApi, <#=Repeat(i, "TArg{i}")#>, Task<TResult>> work) => new(work);
 }
 

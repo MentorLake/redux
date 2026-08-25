@@ -19,7 +19,7 @@ public class CustomThunkApiTests
 		_store.RegisterReducers(
 			FeatureReducer.Build(new PersonState("Hello", "World"))
 				.On<UpdateFirstNameAction>((s, a) => s with { FirstName = a.FirstName }));
-		_store.UseThunkApi(ctx => new AppThunkApi(ctx, _users));
+		_store.RegisterThunkApiFactory(ctx => new AppThunkApi(ctx, _users));
 	}
 
 	[TestMethod]

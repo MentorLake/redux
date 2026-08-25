@@ -27,7 +27,7 @@ public sealed partial class ReduxStore
 	public StoreState State { get; private set; }
 	public IObservable<object> Actions => _actionDispatcher;
 
-	public void UseThunkApi<TApi>(Func<ThunkApiContext, TApi> factory) where TApi : ThunkApi
+	public void RegisterThunkApiFactory<TApi>(Func<ThunkApiContext, TApi> factory) where TApi : ThunkApi
 	{
 		ArgumentNullException.ThrowIfNull(factory);
 		_thunkApiFactories[typeof(TApi)] = ctx => factory(ctx);
