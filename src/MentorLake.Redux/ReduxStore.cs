@@ -41,7 +41,6 @@ public sealed partial class ReduxStore
 	public void Dispatch(object action)
 	{
 		if (action == null) return;
-		Debug.WriteLine($"Dispatching action: {action.GetType().Name}");
 		ProcessActionQueue(action);
 	}
 
@@ -145,7 +144,7 @@ public sealed partial class ReduxStore
 
 		foreach (var reducer in _reducers)
 		{
-			if (reducer.ActionType.Contains(actionName))
+ 		if (reducer.ActionType == actionName)
 			{
 				currentState = reducer.Reduce(currentState, action);
 			}
