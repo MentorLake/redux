@@ -5,6 +5,8 @@ using MentorLake.Redux.Effects;
 using MentorLake.Redux.Reducers;
 using MentorLake.Redux.Selectors;
 using MentorLake.Redux.Thunks;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace MentorLake.Redux;
 
@@ -39,6 +41,18 @@ public sealed partial class ReduxStore
 	}
 
 	public void Dispatch(object action)
+{
+    if (action == null) return;
+    ProcessActionQueue(action);
+}
+	// Async action creator: creates an action via an async factory and dispatches it.
+	public IObservable<TAction> DispatchAsync<TAction>(Func<Task<TAction>> asyncFactory) where TAction : IAction
+	{
+		return Observable.FromAsync(asyncFactory)
+			.Do(action => Dispatch(action))
+			.Publish()
+			.RefCount();
+	}
 	{
 		if (action == null) return;
 		ProcessActionQueue(action);
@@ -136,6 +150,32 @@ public sealed partial class ReduxStore
 
 		_stateSubject.OnNext(State);
 	}
+
+	// Register reducers from an assembly by scanning for IReducerFactory or IFeatureReducer implementations
+	public void RegisterReducersFromAssembly(System.Reflection.Assembly assembly)
+	{
+		if (assembly == null) throw new System.ArgumentNullException(nameof(assembly));
+
+		// Factories
+		var factoryTypes = assembly.GetTypes()
+			.Where(t => typeof(IReducerFactory).IsAssignableFrom(t) && !t.IsAbstract && t.GetConstructor(System.Type.EmptyTypes) != null);
+		foreach (var ft in factoryTypes)
+		{
+			var factory = (IReducerFactory)System.Activator.CreateInstance(ft);
+			RegisterReducers(factory);
+		}
+
+		// Direct feature reducers
+		var reducerTypes = assembly.GetTypes()
+			.Where(t => typeof(IFeatureReducer).IsAssignableFrom(t) && !t.IsAbstract && t.GetConstructor(System.Type.EmptyTypes) != null);
+		foreach (var rt in reducerTypes)
+		{
+			var reducer = (IFeatureReducer)System.Activator.CreateInstance(rt);
+			RegisterReducers(reducer);
+		}
+	}
+}
+
 
 	private StoreState Reduce(StoreState state, object action)
 	{
