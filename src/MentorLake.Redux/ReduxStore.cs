@@ -41,10 +41,10 @@ public sealed partial class ReduxStore
 	}
 
 	public void Dispatch(object action)
-{
-    if (action == null) return;
-    ProcessActionQueue(action);
-}
+	{
+		if (action == null) return;
+		ProcessActionQueue(action);
+	}
 	// Async action creator: creates an action via an async factory and dispatches it.
 	public IObservable<TAction> DispatchAsync<TAction>(Func<Task<TAction>> asyncFactory) where TAction : IAction
 	{
@@ -52,10 +52,6 @@ public sealed partial class ReduxStore
 			.Do(action => Dispatch(action))
 			.Publish()
 			.RefCount();
-	}
-	{
-		if (action == null) return;
-		ProcessActionQueue(action);
 	}
 
 	public ThunkResult DispatchThunk<TApi>(ICallableThunkAction<TApi> thunk) where TApi : ThunkApi
@@ -174,8 +170,6 @@ public sealed partial class ReduxStore
 			RegisterReducers(reducer);
 		}
 	}
-}
-
 
 	private StoreState Reduce(StoreState state, object action)
 	{
@@ -184,7 +178,7 @@ public sealed partial class ReduxStore
 
 		foreach (var reducer in _reducers)
 		{
- 		if (reducer.ActionType == actionName)
+			if (reducer.ActionType == actionName)
 			{
 				currentState = reducer.Reduce(currentState, action);
 			}
