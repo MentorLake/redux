@@ -1,14 +1,10 @@
-using System;
-using System.Diagnostics;
+using System.Reflection;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
 using MentorLake.Redux.Effects;
 using MentorLake.Redux.Reducers;
 using MentorLake.Redux.Selectors;
 using MentorLake.Redux.Thunks;
-using System.Linq;
-using System.Threading.Tasks;
-using System.Collections.Generic; // Added for List<T> and Dictionary<TKey,TValue>
 
 namespace MentorLake.Redux;
 
@@ -46,14 +42,6 @@ public sealed partial class ReduxStore
 	{
 		if (action == null) return;
 		ProcessActionQueue(action);
-	}
-	// Async action creator: creates an action via an async factory and dispatches it.
-	public IObservable<TAction> DispatchAsync<TAction>(Func<Task<TAction>> asyncFactory) where TAction : IAction
-	{
-		return Observable.FromAsync(asyncFactory)
-			.Do(action => Dispatch(action))
-			.Publish()
-			.RefCount();
 	}
 
 	public ThunkResult DispatchThunk<TApi>(ICallableThunkAction<TApi> thunk) where TApi : ThunkApi
@@ -149,27 +137,32 @@ public sealed partial class ReduxStore
 		_stateSubject.OnNext(State);
 	}
 
-	// Register reducers from an assembly by scanning for IReducerFactory or IFeatureReducer implementations
-	public void RegisterReducersFromAssembly(System.Reflection.Assembly assembly)
+	public void RegisterAssembly(Assembly assembly)
 	{
-		if (assembly == null) throw new System.ArgumentNullException(nameof(assembly));
+		if (assembly == null) throw new ArgumentNullException(nameof(assembly));
 
-		// Factories
 		var factoryTypes = assembly.GetTypes()
-			.Where(t => typeof(IReducerFactory).IsAssignableFrom(t) && !t.IsAbstract && t.GetConstructor(System.Type.EmptyTypes) != null);
+			.Where(t => typeof(IReducerFactory).IsAssignableFrom(t) && !t.IsAbstract && t.GetConstructor(Type.EmptyTypes) != null);
 		foreach (var ft in factoryTypes)
 		{
-			var factory = (IReducerFactory)System.Activator.CreateInstance(ft);
+			var factory = (IReducerFactory)Activator.CreateInstance(ft);
 			RegisterReducers(factory);
 		}
 
-		// Direct feature reducers
 		var reducerTypes = assembly.GetTypes()
-			.Where(t => typeof(IFeatureReducer).IsAssignableFrom(t) && !t.IsAbstract && t.GetConstructor(System.Type.EmptyTypes) != null);
+			.Where(t => typeof(IFeatureReducer).IsAssignableFrom(t) && !t.IsAbstract && t.GetConstructor(Type.EmptyTypes) != null);
 		foreach (var rt in reducerTypes)
 		{
-			var reducer = (IFeatureReducer)System.Activator.CreateInstance(rt);
+			var reducer = (IFeatureReducer)Activator.CreateInstance(rt);
 			RegisterReducers(reducer);
+		}
+
+		var effectFactoryTypes = assembly.GetTypes()
+			.Where(t => typeof(IEffectsFactory).IsAssignableFrom(t) && !t.IsAbstract && t.GetConstructor(Type.EmptyTypes) != null);
+		foreach (var eft in effectFactoryTypes)
+		{
+			var factory = (IEffectsFactory)Activator.CreateInstance(eft);
+			RegisterEffects(factory);
 		}
 	}
 

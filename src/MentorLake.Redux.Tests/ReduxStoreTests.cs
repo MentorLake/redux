@@ -190,6 +190,26 @@ public class ReduxStoreTests
 		Assert.AreEqual("Sync", store.State.GetFeatureState<PersonState>().FirstName);
 	}
 
+	[TestMethod]
+	public void RegisterAssembly_RegistersFactoriesAndEffects()
+	{
+		var store = new ReduxStore();
+		store.RegisterAssembly(typeof(ReduxStoreTests).Assembly);
+
+		store.Dispatch(new UpdateFirstNameAction("Assem"));
+		Assert.AreEqual("Assem", store.State.GetFeatureState<PersonState>().FirstName);
+
+		store.Dispatch(new ZipCodeUpdatedAction("54321"));
+		Assert.AreEqual("54321", store.State.GetFeatureState<AddressState>().ZipCode);
+	}
+
+	[TestMethod]
+	public void RegisterAssembly_Null_Throws()
+	{
+		var store = new ReduxStore();
+		Assert.Throws<ArgumentNullException>(() => store.RegisterAssembly(null));
+	}
+
 	private static ReduxStore CreatePersonStore()
 	{
 		var store = new ReduxStore();

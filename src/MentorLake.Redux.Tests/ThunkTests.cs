@@ -79,11 +79,10 @@ public class ThunkTests
 	}
 
 	[TestMethod]
-	[ExpectedException(typeof(TestException))]
 	public async Task ThunkFunc_ToTask_RethrowsRejectedException()
 	{
 		var thunk = new ThunkFunc<ThunkApi, string>("FailFunc", _ => throw new TestException());
-		await _store.DispatchThunk(thunk.Bind()).ToTask();
+		await Assert.ThrowsAsync<TestException>(() => _store.DispatchThunk(thunk.Bind()).ToTask());
 	}
 
 	[TestMethod]

@@ -15,10 +15,9 @@ public class StoreStateTests
 	}
 
 	[TestMethod]
-	[ExpectedException(typeof(KeyNotFoundException))]
 	public void GetFeatureState_MissingKey_Throws()
 	{
-		new StoreState().GetFeatureState<PersonState>();
+		Assert.Throws<KeyNotFoundException>(() => new StoreState().GetFeatureState<PersonState>());
 	}
 
 	[TestMethod]

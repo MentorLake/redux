@@ -55,6 +55,16 @@ public class MySelectors
 	public static readonly ISelector<string> ZipCode = SelectorFactory.Create(Address, s => s.ZipCode);
 }
 
+public class EffectsTriggerFactory : IEffectsFactory
+{
+	public IEnumerable<Effect> Create() =>
+	[
+		EffectsFactory.Create(actions => actions
+			.OfType<UpdateFirstNameAction>()
+			.Do(_ => { }))
+	];
+}
+
 public class PersonService
 {
 	public void SavePerson(PersonState state)
@@ -246,10 +256,9 @@ public class Demo
 	}
 
 	[TestMethod]
-	[ExpectedException(typeof(TestException))]
 	public async Task ThunkExceptionTask()
 	{
-		await _store.DispatchThunk(TestThunks.Test2.Bind()).ToTask();
+		await Assert.ThrowsAsync<TestException>(() => _store.DispatchThunk(TestThunks.Test2.Bind()).ToTask());
 	}
 
 	[TestMethod]

@@ -106,7 +106,7 @@ public class CustomThunkApiTests
 	[TestMethod]
 	public async Task CustomThunkApi_MissingFactory_ThrowsHelpfulError()
 	{
-		var ex = await Assert.ThrowsExceptionAsync<InvalidOperationException>(() => _store.Using<SimpleThunkApi>().Dispatch(_ => Task.CompletedTask).ToTask());
+		var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => _store.Using<SimpleThunkApi>().Dispatch(_ => Task.CompletedTask).ToTask());
 		StringAssert.Contains(ex.Message, nameof(SimpleThunkApi));
 	}
 
