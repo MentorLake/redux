@@ -53,7 +53,7 @@ public sealed partial class ReduxStore
 		var api = CreateThunkApi<TApi>(localActionDispatcher, token);
 
 		localActionDispatcher
-			.Do(Dispatch)
+			.Do(a => Dispatch(a))
 			.TakeUntil(a => a is ThunkFulfilled or ThunkRejected or ThunkCancelled)
 			.Subscribe(actions);
 

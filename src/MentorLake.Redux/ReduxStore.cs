@@ -1,6 +1,7 @@
-using System.Reflection;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
+using System.Reflection;
+using System.Threading.Channels;
 using MentorLake.Redux.Effects;
 using MentorLake.Redux.Middleware;
 using MentorLake.Redux.Reducers;
@@ -8,29 +9,144 @@ using MentorLake.Redux.Selectors;
 
 namespace MentorLake.Redux;
 
-public sealed partial class ReduxStore
+public record ActionDispatch
+{
+	public object[] Actions { get; init; }
+	public TaskCompletionSource CompletionSource { get; init; }
+}
+
+public sealed partial class ReduxStore : IAsyncDisposable
 {
 	private readonly Subject<object> _actionDispatcher = new();
 	private readonly List<ActionReducer<StoreState>> _reducers = new();
 	private readonly List<IReduxMiddleware> _middlewares = new();
 	private readonly BehaviorSubject<StoreState> _stateSubject;
 	private NextMiddleware _middlewarePipeline;
-	private int _batchDepth;
-	private bool _batchStateChanged;
+	private int _processorThreadId = -1;
+	private readonly Channel<ActionDispatch> _actionChannel = Channel.CreateUnbounded<ActionDispatch>(new() { SingleReader = true });
+	private readonly CancellationTokenSource _processorCancellationToken = new();
+	private readonly Task _processorTask;
+	private bool _isDisposed;
+	private readonly Subject<Exception> _errorSubject = new();
+
+	public IObservable<Exception> Errors => _errorSubject;
+	public StoreState State { get; private set; }
+	public IObservable<object> Actions => _actionDispatcher;
 
 	public ReduxStore()
 	{
 		State = new();
 		_stateSubject = new(State);
+		_processorTask = Task.Run(() => ProcessActionsAsync(_processorCancellationToken.Token));
 	}
 
-	public StoreState State { get; private set; }
-	public IObservable<object> Actions => _actionDispatcher;
-
-	public void Dispatch(object action)
+	public async ValueTask DisposeAsync()
 	{
-		if (action == null) return;
-		(_middlewarePipeline ??= BuildMiddlewarePipeline())(action);
+		Volatile.Write(ref _isDisposed, true);
+		_actionChannel.Writer.TryComplete();
+		await _processorTask;
+		_processorCancellationToken.Dispose();
+		_actionDispatcher.Dispose();
+		_stateSubject.Dispose();
+		_errorSubject.Dispose();
+	}
+
+	public void Dispatch(params object[] actions)
+	{
+		if (Volatile.Read(ref _isDisposed)) throw new ObjectDisposedException(nameof(ReduxStore));
+		if (actions == null) return;
+		var filtered = actions.Where(a => a != null).ToArray();
+		if (filtered.Length == 0) return;
+		DispatchInternal(filtered);
+	}
+
+	private void DispatchInternal(object[] actions)
+	{
+		var taskCompletionSource = new TaskCompletionSource();
+
+		if (!_actionChannel.Writer.TryWrite(new() { Actions = actions, CompletionSource = taskCompletionSource }))
+		{
+			throw new ObjectDisposedException(nameof(ReduxStore));
+		}
+
+		if (Volatile.Read(ref _processorThreadId) != Environment.CurrentManagedThreadId)
+		{
+			taskCompletionSource.Task.GetAwaiter().GetResult();
+		}
+	}
+
+	private async Task ProcessActionsAsync(CancellationToken cancellationToken = default)
+	{
+		var reader = _actionChannel.Reader;
+
+		while (await reader.WaitToReadAsync(cancellationToken))
+		{
+			Interlocked.Exchange(ref _processorThreadId, Environment.CurrentManagedThreadId);
+
+			while (reader.TryRead(out var action))
+			{
+				try
+				{
+					var initialState = State;
+					var middlewarePipeline = _middlewarePipeline ??= BuildMiddlewarePipeline();
+
+					try
+					{
+						foreach (var a in action.Actions)
+						{
+							middlewarePipeline(a);
+						}
+					}
+					catch (Exception e)
+					{
+						if (!ReferenceEquals(initialState, State))
+						{
+							_stateSubject.OnNext(State);
+						}
+
+						_errorSubject.OnNext(e);
+						action.CompletionSource.SetException(e);
+						continue;
+					}
+
+					if (!ReferenceEquals(initialState, State))
+					{
+						_stateSubject.OnNext(State);
+					}
+
+					action.CompletionSource.SetResult();
+				}
+				catch (Exception ex)
+				{
+					_errorSubject.OnNext(ex);
+					action.CompletionSource.SetException(ex);
+				}
+			}
+
+			Interlocked.Exchange(ref _processorThreadId, -1);
+		}
+	}
+
+	private void ReduceAndNotify(object action)
+	{
+		State = Reduce(State, action);
+		_actionDispatcher.OnNext(action);
+	}
+
+	private StoreState Reduce(StoreState state, object action)
+	{
+		var actionName = action is IAction a ? a.ActionName : action.GetType().FullName;
+		var currentState = state;
+
+		foreach (var reducer in _reducers)
+		{
+			if (reducer.ActionType == actionName)
+			{
+				currentState = reducer.Reduce(currentState, action);
+			}
+		}
+
+		return currentState;
 	}
 
 	public void UseMiddleware(params IReduxMiddleware[] middlewares)
@@ -46,27 +162,6 @@ public sealed partial class ReduxStore
 		_middlewarePipeline = null;
 	}
 
-	public void Batch(Action batch)
-	{
-		ArgumentNullException.ThrowIfNull(batch);
-
-		try
-		{
-			_batchDepth++;
-			batch();
-		}
-		finally
-		{
-			_batchDepth--;
-
-			if (_batchDepth == 0 && _batchStateChanged)
-			{
-				_batchStateChanged = false;
-				_stateSubject.OnNext(State);
-			}
-		}
-	}
-
 	private NextMiddleware BuildMiddlewarePipeline()
 	{
 		NextMiddleware pipeline = ReduceAndNotify;
@@ -78,12 +173,6 @@ public sealed partial class ReduxStore
 		}
 
 		return pipeline;
-	}
-
-	private void ReduceAndNotify(object action)
-	{
-		UpdateState(Reduce(State, action));
-		_actionDispatcher.OnNext(action);
 	}
 
 	public void RegisterEffects(params IEffectsFactory[] factories)
@@ -160,34 +249,6 @@ public sealed partial class ReduxStore
 			var factory = (IEffectsFactory)Activator.CreateInstance(eft);
 			RegisterEffects(factory);
 		}
-	}
-
-	private StoreState Reduce(StoreState state, object action)
-	{
-		var actionName = action is IAction a ? a.ActionName : action.GetType().FullName;
-		var currentState = state;
-
-		foreach (var reducer in _reducers)
-		{
-			if (reducer.ActionType == actionName)
-			{
-				currentState = reducer.Reduce(currentState, action);
-			}
-		}
-
-		return currentState;
-	}
-
-	private void UpdateState(StoreState state)
-	{
-		State = state;
-		if (_batchDepth > 0)
-		{
-			_batchStateChanged = true;
-			return;
-		}
-
-		_stateSubject.OnNext(state);
 	}
 
 	public IObservable<TResult> Select<TResult>(Func<StoreState, TResult> selector)

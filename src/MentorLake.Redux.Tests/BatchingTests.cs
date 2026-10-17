@@ -1,4 +1,5 @@
 using System.Reactive.Linq;
+using MentorLake.Redux.Middleware;
 using MentorLake.Redux.Reducers;
 
 namespace MentorLake.Redux.Tests;
@@ -33,34 +34,26 @@ public class BatchingTests
 	}
 
 	[TestMethod]
-	public void Batch_CoalescesStateNotifications()
+	public void BatchOfActions_CoalescesIntoOneNotification()
 	{
 		var store = CreateStore();
 		var notifications = 0;
 		store.Select(s => s.GetFeatureState<BatchCounterState>()).Skip(1).Subscribe(_ => notifications++);
 
-		store.Batch(() =>
-		{
-			store.Dispatch(new BatchIncrementAction(1));
-			store.Dispatch(new BatchIncrementAction(2));
-			store.Dispatch(new BatchIncrementAction(3));
-		});
+		store.Dispatch(new BatchIncrementAction(1), new BatchIncrementAction(2), new BatchIncrementAction(3));
 
 		Assert.AreEqual(1, notifications);
 		Assert.AreEqual(6, store.State.GetFeatureState<BatchCounterState>().Value);
 	}
 
 	[TestMethod]
-	public void Batch_UpdatesStateSynchronously()
+	public void Batch_AppliesAllActionsInOrder()
 	{
 		var store = CreateStore();
-		store.Batch(() =>
-		{
-			store.Dispatch(new BatchIncrementAction(1));
-			Assert.AreEqual(1, store.State.GetFeatureState<BatchCounterState>().Value);
-			store.Dispatch(new BatchIncrementAction(1));
-			Assert.AreEqual(2, store.State.GetFeatureState<BatchCounterState>().Value);
-		});
+
+		store.Dispatch(new BatchIncrementAction(1), new BatchIncrementAction(2), new BatchIncrementAction(3));
+
+		Assert.AreEqual(6, store.State.GetFeatureState<BatchCounterState>().Value);
 	}
 
 	[TestMethod]
@@ -70,65 +63,61 @@ public class BatchingTests
 		var actions = new List<object>();
 		store.Actions.Subscribe(a => actions.Add(a));
 
-		store.Batch(() =>
-		{
-			store.Dispatch(new BatchIncrementAction(1));
-			store.Dispatch(new BatchIncrementAction(2));
-		});
+		store.Dispatch(new BatchIncrementAction(1), new BatchIncrementAction(2));
 
 		Assert.AreEqual(2, actions.Count);
 	}
 
 	[TestMethod]
-	public void NestedBatch_CoalescesIntoOutermost()
+	public void Batch_WithNoActions_EmitsNoNotification()
 	{
 		var store = CreateStore();
 		var notifications = 0;
 		store.Select(s => s.GetFeatureState<BatchCounterState>()).Skip(1).Subscribe(_ => notifications++);
 
-		store.Batch(() =>
-		{
-			store.Dispatch(new BatchIncrementAction(1));
-			store.Batch(() => store.Dispatch(new BatchIncrementAction(2)));
-			Assert.AreEqual(0, notifications);
-		});
+		store.Dispatch();
 
-		Assert.AreEqual(1, notifications);
+		Assert.AreEqual(0, notifications);
 	}
 
 	[TestMethod]
-	public void Batch_DispatchesAfterException_StillFlushes()
+	public void Batch_WithNoStateChange_EmitsNoNotification()
 	{
 		var store = CreateStore();
+		var notifications = 0;
+		store.Select(s => s.GetFeatureState<BatchCounterState>()).Skip(1).Subscribe(_ => notifications++);
+
+		store.Dispatch(new object(), new object());
+
+		Assert.AreEqual(0, notifications);
+	}
+
+	[TestMethod]
+	public void Batch_AfterException_StoreRemainsUsable()
+	{
+		var store = new ReduxStore();
+		store.UseMiddleware(ReduxMiddleware.Create((action, next) =>
+		{
+			if (action is BatchIncrementAction { Amount: 99 }) throw new InvalidOperationException("boom");
+			next(action);
+		}));
+		store.RegisterReducers(
+			FeatureReducer.Build(new BatchCounterState(0))
+				.On<BatchIncrementAction>((state, action) => state with { Value = state.Value + action.Amount }));
+
 		var notifications = 0;
 		store.Select(s => s.GetFeatureState<BatchCounterState>()).Skip(1).Subscribe(_ => notifications++);
 
 		try
 		{
-			store.Batch(() =>
-			{
-				store.Dispatch(new BatchIncrementAction(1));
-				throw new InvalidOperationException("boom");
-			});
+			store.Dispatch(new BatchIncrementAction(1), new BatchIncrementAction(99));
+			Assert.Fail("caller should observe middleware exception");
 		}
 		catch (InvalidOperationException)
 		{
 		}
 
-		Assert.AreEqual(1, notifications);
-		store.Dispatch(new BatchIncrementAction(1));
-		Assert.AreEqual(2, notifications);
-	}
-
-	[TestMethod]
-	public void Batch_WithNoDispatches_EmitsNoNotification()
-	{
-		var store = CreateStore();
-		var notifications = 0;
-		store.Select(s => s.GetFeatureState<BatchCounterState>()).Skip(1).Subscribe(_ => notifications++);
-
-		store.Batch(() => { });
-
-		Assert.AreEqual(0, notifications);
+		store.Dispatch(new BatchIncrementAction(5));
+		Assert.AreEqual(6, store.State.GetFeatureState<BatchCounterState>().Value);
 	}
 }

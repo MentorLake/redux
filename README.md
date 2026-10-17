@@ -27,7 +27,7 @@ Action  →  Reducer  →  New State  →  Subscribers notified
 | **Feature reducers** | Fluent, type-safe reducers per state slice with `FeatureReducer.Build(...).On<TAction>(...)` |
 | **Memoized selectors** | Composable selectors (up to 7 inputs) that only recompute when inputs change, with custom comparers |
 | **Middleware** | Intercept, rewrite, guard, or short-circuit every dispatch before it reaches reducers |
-| **Batching** | `store.Batch(...)` coalesces multiple dispatches into a single state notification |
+| **Batching** | `store.Dispatch(a1, a2, ...)` coalesces multiple actions into a single state notification |
 | **Effects** | Rx pipelines that react to dispatched actions — API calls, logging, navigation — decoupled from reducers |
 | **Thunks** | Async work units with named lifecycle actions, results, nesting, and dependency injection via custom `ThunkApi` |
 | **Cancellation** | Cancellable thunks with cancellation groups (take-latest) and declarative effect strategies (`TakeLatest`, `TakeEvery`, `Exhaust`, debounce/throttle) |
@@ -85,6 +85,9 @@ store.Select(s => s.GetFeatureState<PersonState>())
 | [Actions](docs/actions.md) | Action objects, the action stream, named actions with `IAction` |
 | [Middleware](docs/middleware.md) | Intercepting, rewriting, and guarding dispatches before reducers |
 | [Batching](docs/batching.md) | Coalescing multiple dispatches into one state notification |
+| [Threading](docs/threading.md) | The single-threaded core, thread-safe dispatch, and the dispatch contract |
+| [Best Practices](docs/best-practices.md) | Do's and don'ts: middleware, subscribers, `ObserveOn`, async work |
+| [Error Handling](docs/error-handling.md) | Dispatch failures, the `Errors` stream, and batch failure semantics |
 | [Reducers](docs/reducers.md) | Feature reducers, action handlers, factories, and immutability patterns |
 | [Selectors](docs/selectors.md) | Memoized, composable selectors and reactive state queries |
 | [Effects](docs/effects.md) | Rx-based side-effect pipelines triggered by actions |

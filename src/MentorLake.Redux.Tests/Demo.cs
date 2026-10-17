@@ -149,8 +149,9 @@ public class Demo
 		var actions = new List<object>();
 		using var _ = _store.Actions.Subscribe(actions.Add);
 
+		Console.WriteLine("Dispatching SavePersonWithDispatchAction");
 		_store.Dispatch(new SavePersonWithDispatchAction(new PersonState("Hello", "World")));
-
+		Console.WriteLine("COMPLETE Dispatching SavePersonWithDispatchAction");
 		Assert.AreEqual(3, actions.Count);
 		Assert.AreEqual(1, actions.OfType<SavePersonWithDispatchAction>().Count());
 		Assert.AreEqual(1, actions.OfType<SavePersonCompleteAction>().Count());

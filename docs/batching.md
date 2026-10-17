@@ -1,6 +1,6 @@
 # Batching
 
-Each dispatch normally pushes a new state through the store's observable, notifying every selector and subscriber. When you dispatch several actions in a row (e.g. hydrating several features after a login response), that means several UI renders for one logical update. `Batch` coalesces them into a single state notification.
+Each dispatch normally pushes a new state through the store's observable, notifying every selector and subscriber. When several actions form one logical update (e.g. hydrating several features after a login response), that means several UI renders. Passing multiple actions to a single `Dispatch` coalesces them into one state notification.
 
 - [Usage](#usage)
 - [Semantics](#semantics)
@@ -9,24 +9,23 @@ Each dispatch normally pushes a new state through the store's observable, notify
 ## Usage
 
 ```csharp
-store.Batch(() =>
-{
-    store.Dispatch(new SetUserAction(user));
-    store.Dispatch(new SetPreferencesAction(prefs));
-    store.Dispatch(new SetCartAction(cart));
-});
+store.Dispatch(
+    new SetUserAction(user),
+    new SetPreferencesAction(prefs),
+    new SetCartAction(cart));
 // subscribers are notified once, with the final state
 ```
 
-`Batch` is intentionally synchronous. Batching holds a counter open for the duration of the body, so an `await` inside it could resume on a different thread and race that counter. Dispatch before and after the await instead, or wrap each synchronous burst in its own `Batch`.
+The actions are submitted to the store as a single unit. The store processes them in order on its dispatch processor, then emits one state notification.
 
 ## Semantics
 
-- `store.State` is updated **synchronously** by every dispatch inside the batch — reducers always see the latest state.
+- The actions are applied **in order**, as one atomic unit. Subscribers never observe a partially applied batch.
 - The action stream (`store.Actions`) still emits **every** action; only state notifications are coalesced.
-- Nested batches join the outermost one; the single notification fires when the outermost batch completes.
-- If the batch body throws, the pending notification is still flushed before the exception propagates, so subscribers never observe a stale state silently.
-- A batch with no dispatches produces no notification.
+- `store.State` reflects the batch only once the whole batch has been applied. `Dispatch` blocks until then, so reading state after the call always sees the final result.
+- Batches from any number of threads are safe: each batch is a single item in the store's queue, so concurrent batches are applied whole, one after another.
+- If an action's middleware or reducer throws, the exception propagates to the dispatching caller and the store continues with the next queued item.
+- A batch that changes no state produces no notification.
 
 ## When to Use It
 

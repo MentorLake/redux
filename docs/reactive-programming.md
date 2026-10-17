@@ -176,10 +176,8 @@ In Blazor, dispose in `Dispose`; in MAUI/WPF, dispose when the page/view model d
 
 ## Threading
 
-- `Dispatch` runs reducers **synchronously on the calling thread** and pushes to subscribers inline. Dispatch from the UI thread and your reducers run on the UI thread — keep them fast.
-- Async continuations (effects, thunks) run wherever their awaited work completes. Reducers triggered by a thunk's `Dispatch` therefore run on that continuation's context.
-- State is immutable, so **reading** `store.State` or applying selectors from any thread is safe.
-- If you need UI-thread delivery for a subscription, use Rx scheduling rather than blocking:
+- `Dispatch` is **blocking**: it queues the action(s) and returns only after the store's single processor thread has run the full pipeline. Reducers and middleware always run on that processor thread, never on yours. See [Threading](threading.md) for the full model.
+- Because notifications fire on the processor thread, subscribers (including Blazor/MAUI render triggers) should marshal to the UI thread with Rx scheduling rather than blocking:
 
 ```csharp
 store.Select(MySelectors.User)
@@ -187,8 +185,11 @@ store.Select(MySelectors.User)
     .Subscribe(user => UpdateUi(user));
 ```
 
+- State is immutable, so **reading** `store.State` or applying selectors from any thread is safe.
+
 ## See Also
 
+- [Threading](threading.md) — the single-threaded core and thread-safe dispatch
 - [Effects](effects.md) — pipelines in practice
 - [Selectors](selectors.md) — memoization and deduplication
 - [Thunks](thunks.md) — task/observable bridging for async work
