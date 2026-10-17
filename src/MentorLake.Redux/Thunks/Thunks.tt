@@ -41,6 +41,10 @@ public readonly struct CallableThunkAction<TApi>(string actionName, Func<TApi, T
 			await work(api);
 			api.Dispatch(new ThunkFulfilled(actionName));
 		}
+		catch (OperationCanceledException)
+		{
+			api.Dispatch(new ThunkCancelled(actionName));
+		}
 		catch (Exception e)
 		{
 			api.Dispatch(new ThunkRejected(actionName, e));
@@ -59,6 +63,10 @@ public readonly struct CallableThunkFunc<TApi, TResult>(string actionName, Func<
 			api.Dispatch(new ThunkPending(actionName));
 			var result = await work(api);
 			api.Dispatch(new ThunkFulfilled<TResult>(actionName, result));
+		}
+		catch (OperationCanceledException)
+		{
+			api.Dispatch(new ThunkCancelled(actionName));
 		}
 		catch (Exception e)
 		{
@@ -99,6 +107,10 @@ public readonly struct CallableThunkAction<TApi, <#=Repeat(i, "TArg{i}")#>>(stri
 			await work(api, <#=Repeat(i, "arg{i}")#>);
 			api.Dispatch(new ThunkFulfilled(actionName));
 		}
+		catch (OperationCanceledException)
+		{
+			api.Dispatch(new ThunkCancelled(actionName));
+		}
 		catch (Exception e)
 		{
 			api.Dispatch(new ThunkRejected(actionName, e));
@@ -115,6 +127,10 @@ public readonly struct CallableThunkFunc<TApi, <#=Repeat(i, "TArg{i}")#>, TResul
 			api.Dispatch(new ThunkPending(actionName));
 			var result = await work(api, <#=Repeat(i, "arg{i}")#>);
 			api.Dispatch(new ThunkFulfilled<TResult>(actionName, result));
+		}
+		catch (OperationCanceledException)
+		{
+			api.Dispatch(new ThunkCancelled(actionName));
 		}
 		catch (Exception e)
 		{

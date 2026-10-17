@@ -101,7 +101,6 @@ public class ThunkTests
 		}
 		catch (TestException)
 		{
-			// expected from nested ToTask
 		}
 	}
 
@@ -380,6 +379,40 @@ public class ThunkTests
 
 		await _store.DispatchThunk(parent.Bind()).ToTask();
 		Assert.AreEqual("NestedMethodGroup", _store.State.GetFeatureState<PersonState>().FirstName);
+	}
+
+	[TestMethod]
+	public async Task DispatchThunk_SubscribedMultipleTimes_RunsThunkOnce()
+	{
+		var executions = 0;
+		var thunk = new ThunkAction<ThunkApi>("Once", _ =>
+		{
+			Interlocked.Increment(ref executions);
+			return Task.CompletedTask;
+		});
+
+		var result = _store.DispatchThunk(thunk.Bind());
+		result.Actions.Subscribe(_ => { });
+		result.Actions.Subscribe(_ => { });
+		await result.ToTask();
+
+		Assert.AreEqual(1, executions);
+	}
+
+	[TestMethod]
+	public async Task DispatchThunk_SubscribedMultipleTimes_DispatchesStoreActionsOnce()
+	{
+		_store.RegisterReducers(
+			FeatureReducer.Build(new ThunkState())
+				.On<ThunkFulfilled>("OnceStore/fulfilled", (s, _) => new ThunkState { CallCount = s.CallCount + 1 }));
+
+		var thunk = new ThunkAction<ThunkApi>("OnceStore", _ => Task.CompletedTask);
+		var result = _store.DispatchThunk(thunk.Bind());
+		result.Actions.Subscribe(_ => { });
+		result.Actions.Subscribe(_ => { });
+		await result.ToTask();
+
+		Assert.AreEqual(1, _store.State.GetFeatureState<ThunkState>().CallCount);
 	}
 
 	private static Task UpdateFirstName(ThunkApi api, string firstName)

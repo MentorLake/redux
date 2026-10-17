@@ -8,24 +8,24 @@ namespace MentorLake.Redux
 {
 	public sealed partial class ReduxStore
 	{
-		public ThunkResult DispatchThunk(ThunkAction<ThunkApi> thunk)
+		public ThunkResult DispatchThunk(ThunkAction<ThunkApi> thunk, CancellationToken cancellationToken = default)
 		{
-			return DispatchThunk(thunk.Bind());
+			return DispatchThunk(thunk.Bind(), cancellationToken);
 		}
 
-		public ThunkResult DispatchThunk(Func<ThunkApi, Task> thunk)
+		public ThunkResult DispatchThunk(Func<ThunkApi, Task> thunk, CancellationToken cancellationToken = default)
 		{
-			return DispatchThunk(new ThunkAction<ThunkApi>(string.Empty, thunk).Bind());
+			return DispatchThunk(new ThunkAction<ThunkApi>(string.Empty, thunk).Bind(), cancellationToken);
 		}
 
-		public ThunkResult<TResult> DispatchThunk<TResult>(ThunkFunc<ThunkApi, TResult> thunk)
+		public ThunkResult<TResult> DispatchThunk<TResult>(ThunkFunc<ThunkApi, TResult> thunk, CancellationToken cancellationToken = default)
 		{
-			return DispatchThunk(thunk.Bind());
+			return DispatchThunk(thunk.Bind(), cancellationToken);
 		}
 
-		public ThunkResult<TResult> DispatchThunk<TResult>(Func<ThunkApi, Task<TResult>> thunk)
+		public ThunkResult<TResult> DispatchThunk<TResult>(Func<ThunkApi, Task<TResult>> thunk, CancellationToken cancellationToken = default)
 		{
-			return DispatchThunk(new ThunkFunc<ThunkApi, TResult>(string.Empty, thunk).Bind());
+			return DispatchThunk(new ThunkFunc<ThunkApi, TResult>(string.Empty, thunk).Bind(), cancellationToken);
 		}
 
 <#
@@ -36,24 +36,73 @@ namespace MentorLake.Redux
 		var methodParams = Repeat(i, "TArg{i} arg{i}");
 		var args = Repeat(i, "arg{i}");
 #>
-		public ThunkResult DispatchThunk<<#=typeArgs#>>(Func<<#=funcParams#>, Task> work, <#=methodParams#>)
+		public ThunkResult DispatchThunk<<#=typeArgs#>>(Func<<#=funcParams#>, Task> work, <#=methodParams#>, CancellationToken cancellationToken = default)
 		{
-			return DispatchThunk(new ThunkAction<<#=funcParams#>>(string.Empty, work).Bind(<#=args#>));
+			return DispatchThunk(new ThunkAction<<#=funcParams#>>(string.Empty, work).Bind(<#=args#>), cancellationToken);
 		}
 
-		public ThunkResult<TResult> DispatchThunk<<#=typeArgs#>, TResult>(Func<<#=funcParams#>, Task<TResult>> work, <#=methodParams#>)
+		public ThunkResult<TResult> DispatchThunk<<#=typeArgs#>, TResult>(Func<<#=funcParams#>, Task<TResult>> work, <#=methodParams#>, CancellationToken cancellationToken = default)
 		{
-			return DispatchThunk(new ThunkFunc<<#=funcParams#>, TResult>(string.Empty, work).Bind(<#=args#>));
+			return DispatchThunk(new ThunkFunc<<#=funcParams#>, TResult>(string.Empty, work).Bind(<#=args#>), cancellationToken);
 		}
 
-		public ThunkResult DispatchThunk<<#=typeArgs#>>(ThunkAction<<#=funcParams#>> thunk, <#=methodParams#>)
+		public ThunkResult DispatchThunk<<#=typeArgs#>>(ThunkAction<<#=funcParams#>> thunk, <#=methodParams#>, CancellationToken cancellationToken = default)
 		{
-			return DispatchThunk(thunk.Bind(<#=args#>));
+			return DispatchThunk(thunk.Bind(<#=args#>), cancellationToken);
 		}
 
-		public ThunkResult<TResult> DispatchThunk<<#=typeArgs#>, TResult>(ThunkFunc<<#=funcParams#>, TResult> thunk, <#=methodParams#>)
+		public ThunkResult<TResult> DispatchThunk<<#=typeArgs#>, TResult>(ThunkFunc<<#=funcParams#>, TResult> thunk, <#=methodParams#>, CancellationToken cancellationToken = default)
 		{
-			return DispatchThunk(thunk.Bind(<#=args#>));
+			return DispatchThunk(thunk.Bind(<#=args#>), cancellationToken);
+		}
+<#
+	}
+#>
+		public ThunkResult DispatchThunkLatest(string cancellationGroup, ThunkAction<ThunkApi> thunk, CancellationToken cancellationToken = default)
+		{
+			return DispatchThunkLatest(cancellationGroup, thunk.Bind(), cancellationToken);
+		}
+
+		public ThunkResult DispatchThunkLatest(string cancellationGroup, Func<ThunkApi, Task> work, CancellationToken cancellationToken = default)
+		{
+			return DispatchThunkLatest(cancellationGroup, new ThunkAction<ThunkApi>(string.Empty, work).Bind(), cancellationToken);
+		}
+
+		public ThunkResult<TResult> DispatchThunkLatest<TResult>(string cancellationGroup, ThunkFunc<ThunkApi, TResult> thunk, CancellationToken cancellationToken = default)
+		{
+			return DispatchThunkLatest(cancellationGroup, thunk.Bind(), cancellationToken);
+		}
+
+		public ThunkResult<TResult> DispatchThunkLatest<TResult>(string cancellationGroup, Func<ThunkApi, Task<TResult>> work, CancellationToken cancellationToken = default)
+		{
+			return DispatchThunkLatest(cancellationGroup, new ThunkFunc<ThunkApi, TResult>(string.Empty, work).Bind(), cancellationToken);
+		}
+<#
+	for (var i = 1; i <= 7; i++)
+	{
+		var typeArgs = Repeat(i, "TArg{i}");
+		var funcParams = "ThunkApi, " + Repeat(i, "TArg{i}");
+		var methodParams = Repeat(i, "TArg{i} arg{i}");
+		var args = Repeat(i, "arg{i}");
+#>
+		public ThunkResult DispatchThunkLatest<<#=typeArgs#>>(string cancellationGroup, Func<<#=funcParams#>, Task> work, <#=methodParams#>, CancellationToken cancellationToken = default)
+		{
+			return DispatchThunkLatest(cancellationGroup, new ThunkAction<<#=funcParams#>>(string.Empty, work).Bind(<#=args#>), cancellationToken);
+		}
+
+		public ThunkResult<TResult> DispatchThunkLatest<<#=typeArgs#>, TResult>(string cancellationGroup, Func<<#=funcParams#>, Task<TResult>> work, <#=methodParams#>, CancellationToken cancellationToken = default)
+		{
+			return DispatchThunkLatest(cancellationGroup, new ThunkFunc<<#=funcParams#>, TResult>(string.Empty, work).Bind(<#=args#>), cancellationToken);
+		}
+
+		public ThunkResult DispatchThunkLatest<<#=typeArgs#>>(string cancellationGroup, ThunkAction<<#=funcParams#>> thunk, <#=methodParams#>, CancellationToken cancellationToken = default)
+		{
+			return DispatchThunkLatest(cancellationGroup, thunk.Bind(<#=args#>), cancellationToken);
+		}
+
+		public ThunkResult<TResult> DispatchThunkLatest<<#=typeArgs#>, TResult>(string cancellationGroup, ThunkFunc<<#=funcParams#>, TResult> thunk, <#=methodParams#>, CancellationToken cancellationToken = default)
+		{
+			return DispatchThunkLatest(cancellationGroup, thunk.Bind(<#=args#>), cancellationToken);
 		}
 <#
 	}
@@ -65,34 +114,34 @@ namespace MentorLake.Redux.Thunks
 {
 	public partial class ThunkApi
 	{
-		public ThunkResult DispatchThunk<TApi>(ICallableThunkAction<TApi> thunk) where TApi : ThunkApi
+		public ThunkResult DispatchThunk<TApi>(ICallableThunkAction<TApi> thunk, CancellationToken cancellationToken = default) where TApi : ThunkApi
 		{
-			return store.DispatchThunk(thunk);
+			return store.DispatchThunk(thunk, cancellationToken);
 		}
 
-		public ThunkResult<TResult> DispatchThunk<TApi, TResult>(ICallableThunkFunc<TApi, TResult> thunk) where TApi : ThunkApi
+		public ThunkResult<TResult> DispatchThunk<TApi, TResult>(ICallableThunkFunc<TApi, TResult> thunk, CancellationToken cancellationToken = default) where TApi : ThunkApi
 		{
-			return store.DispatchThunk(thunk);
+			return store.DispatchThunk(thunk, cancellationToken);
 		}
 
-		public ThunkResult DispatchThunk(ThunkAction<ThunkApi> thunk)
+		public ThunkResult DispatchThunk(ThunkAction<ThunkApi> thunk, CancellationToken cancellationToken = default)
 		{
-			return Using<ThunkApi>().Dispatch(thunk);
+			return Using<ThunkApi>().Dispatch(thunk, cancellationToken);
 		}
 
-		public ThunkResult DispatchThunk(Func<ThunkApi, Task> thunk)
+		public ThunkResult DispatchThunk(Func<ThunkApi, Task> thunk, CancellationToken cancellationToken = default)
 		{
-			return Using<ThunkApi>().Dispatch(new ThunkAction<ThunkApi>(string.Empty, thunk));
+			return Using<ThunkApi>().Dispatch(new ThunkAction<ThunkApi>(string.Empty, thunk), cancellationToken);
 		}
 
-		public ThunkResult<TResult> DispatchThunk<TResult>(ThunkFunc<ThunkApi, TResult> thunk)
+		public ThunkResult<TResult> DispatchThunk<TResult>(ThunkFunc<ThunkApi, TResult> thunk, CancellationToken cancellationToken = default)
 		{
-			return Using<ThunkApi>().Dispatch(thunk);
+			return Using<ThunkApi>().Dispatch(thunk, cancellationToken);
 		}
 
-		public ThunkResult<TResult> DispatchThunk<TResult>(Func<ThunkApi, Task<TResult>> thunk)
+		public ThunkResult<TResult> DispatchThunk<TResult>(Func<ThunkApi, Task<TResult>> thunk, CancellationToken cancellationToken = default)
 		{
-			return Using<ThunkApi>().Dispatch(new ThunkFunc<ThunkApi, TResult>(string.Empty, thunk));
+			return Using<ThunkApi>().Dispatch(new ThunkFunc<ThunkApi, TResult>(string.Empty, thunk), cancellationToken);
 		}
 
 <#
@@ -103,24 +152,24 @@ namespace MentorLake.Redux.Thunks
 		var methodParams = Repeat(i, "TArg{i} arg{i}");
 		var args = Repeat(i, "arg{i}");
 #>
-		public ThunkResult DispatchThunk<<#=typeArgs#>>(Func<<#=funcParams#>, Task> work, <#=methodParams#>)
+		public ThunkResult DispatchThunk<<#=typeArgs#>>(Func<<#=funcParams#>, Task> work, <#=methodParams#>, CancellationToken cancellationToken = default)
 		{
-			return Using<ThunkApi>().Dispatch(work, <#=args#>);
+			return Using<ThunkApi>().Dispatch(work, <#=args#>, cancellationToken);
 		}
 
-		public ThunkResult<TResult> DispatchThunk<<#=typeArgs#>, TResult>(Func<<#=funcParams#>, Task<TResult>> work, <#=methodParams#>)
+		public ThunkResult<TResult> DispatchThunk<<#=typeArgs#>, TResult>(Func<<#=funcParams#>, Task<TResult>> work, <#=methodParams#>, CancellationToken cancellationToken = default)
 		{
-			return Using<ThunkApi>().Dispatch(work, <#=args#>);
+			return Using<ThunkApi>().Dispatch(work, <#=args#>, cancellationToken);
 		}
 
-		public ThunkResult DispatchThunk<<#=typeArgs#>>(ThunkAction<<#=funcParams#>> thunk, <#=methodParams#>)
+		public ThunkResult DispatchThunk<<#=typeArgs#>>(ThunkAction<<#=funcParams#>> thunk, <#=methodParams#>, CancellationToken cancellationToken = default)
 		{
-			return Using<ThunkApi>().Dispatch(thunk, <#=args#>);
+			return Using<ThunkApi>().Dispatch(thunk, <#=args#>, cancellationToken);
 		}
 
-		public ThunkResult<TResult> DispatchThunk<<#=typeArgs#>, TResult>(ThunkFunc<<#=funcParams#>, TResult> thunk, <#=methodParams#>)
+		public ThunkResult<TResult> DispatchThunk<<#=typeArgs#>, TResult>(ThunkFunc<<#=funcParams#>, TResult> thunk, <#=methodParams#>, CancellationToken cancellationToken = default)
 		{
-			return Using<ThunkApi>().Dispatch(thunk, <#=args#>);
+			return Using<ThunkApi>().Dispatch(thunk, <#=args#>, cancellationToken);
 		}
 <#
 	}
@@ -129,15 +178,15 @@ namespace MentorLake.Redux.Thunks
 
 	public sealed partial class ThunkDispatcher<TApi> where TApi : ThunkApi
 	{
-		public ThunkResult Dispatch(CallableThunkAction<TApi> thunk) => _store.DispatchThunk(thunk);
-		public ThunkResult Dispatch(ThunkAction<TApi> thunk) => Dispatch(thunk.Bind());
-		public ThunkResult Dispatch(string actionName, Func<TApi, Task> work) => Dispatch(new ThunkAction<TApi>(actionName ?? string.Empty, work).Bind());
-		public ThunkResult Dispatch(Func<TApi, Task> work) => Dispatch(string.Empty, work);
+		public ThunkResult Dispatch(CallableThunkAction<TApi> thunk, CancellationToken cancellationToken = default) => _store.DispatchThunk(thunk, cancellationToken);
+		public ThunkResult Dispatch(ThunkAction<TApi> thunk, CancellationToken cancellationToken = default) => Dispatch(thunk.Bind(), cancellationToken);
+		public ThunkResult Dispatch(string actionName, Func<TApi, Task> work, CancellationToken cancellationToken = default) => Dispatch(new ThunkAction<TApi>(actionName ?? string.Empty, work).Bind(), cancellationToken);
+		public ThunkResult Dispatch(Func<TApi, Task> work, CancellationToken cancellationToken = default) => Dispatch(string.Empty, work, cancellationToken);
 
-		public ThunkResult<TResult> Dispatch<TResult>(CallableThunkFunc<TApi, TResult> thunk) => _store.DispatchThunk(thunk);
-		public ThunkResult<TResult> Dispatch<TResult>(ThunkFunc<TApi, TResult> thunk) => Dispatch(thunk.Bind());
-		public ThunkResult<TResult> Dispatch<TResult>(string actionName, Func<TApi, Task<TResult>> work) => Dispatch(new ThunkFunc<TApi, TResult>(actionName ?? string.Empty, work));
-		public ThunkResult<TResult> Dispatch<TResult>(Func<TApi, Task<TResult>> work) => Dispatch(string.Empty, work);
+		public ThunkResult<TResult> Dispatch<TResult>(CallableThunkFunc<TApi, TResult> thunk, CancellationToken cancellationToken = default) => _store.DispatchThunk(thunk, cancellationToken);
+		public ThunkResult<TResult> Dispatch<TResult>(ThunkFunc<TApi, TResult> thunk, CancellationToken cancellationToken = default) => Dispatch(thunk.Bind(), cancellationToken);
+		public ThunkResult<TResult> Dispatch<TResult>(string actionName, Func<TApi, Task<TResult>> work, CancellationToken cancellationToken = default) => Dispatch(new ThunkFunc<TApi, TResult>(actionName ?? string.Empty, work), cancellationToken);
+		public ThunkResult<TResult> Dispatch<TResult>(Func<TApi, Task<TResult>> work, CancellationToken cancellationToken = default) => Dispatch(string.Empty, work, cancellationToken);
 <#
 	for (var i = 1; i <= 7; i++)
 	{
@@ -146,34 +195,84 @@ namespace MentorLake.Redux.Thunks
 		var methodParams = Repeat(i, "TArg{i} arg{i}");
 		var args = Repeat(i, "arg{i}");
 #>
-		public ThunkResult Dispatch<<#=typeArgs#>>(ThunkAction<<#=funcParams#>> thunk, <#=methodParams#>)
+		public ThunkResult Dispatch<<#=typeArgs#>>(ThunkAction<<#=funcParams#>> thunk, <#=methodParams#>, CancellationToken cancellationToken = default)
 		{
-			return _store.DispatchThunk(thunk.Bind(<#=args#>));
+			return _store.DispatchThunk(thunk.Bind(<#=args#>), cancellationToken);
 		}
 
-		public ThunkResult Dispatch<<#=typeArgs#>>(Func<<#=funcParams#>, Task> work, <#=methodParams#>)
+		public ThunkResult Dispatch<<#=typeArgs#>>(Func<<#=funcParams#>, Task> work, <#=methodParams#>, CancellationToken cancellationToken = default)
 		{
-			return Dispatch(string.Empty, work, <#=args#>);
+			return Dispatch(string.Empty, work, <#=args#>, cancellationToken);
 		}
 
-		public ThunkResult Dispatch<<#=typeArgs#>>(string actionName, Func<<#=funcParams#>, Task> work, <#=methodParams#>)
+		public ThunkResult Dispatch<<#=typeArgs#>>(string actionName, Func<<#=funcParams#>, Task> work, <#=methodParams#>, CancellationToken cancellationToken = default)
 		{
-			return _store.DispatchThunk(new ThunkAction<<#=funcParams#>>(actionName, work).Bind(<#=args#>));
+			return _store.DispatchThunk(new ThunkAction<<#=funcParams#>>(actionName, work).Bind(<#=args#>), cancellationToken);
 		}
 
-		public ThunkResult<TResult> Dispatch<<#=typeArgs#>, TResult>(ThunkFunc<<#=funcParams#>, TResult> thunk, <#=methodParams#>)
+		public ThunkResult<TResult> Dispatch<<#=typeArgs#>, TResult>(ThunkFunc<<#=funcParams#>, TResult> thunk, <#=methodParams#>, CancellationToken cancellationToken = default)
 		{
-			return _store.DispatchThunk(thunk.Bind(<#=args#>));
+			return _store.DispatchThunk(thunk.Bind(<#=args#>), cancellationToken);
 		}
 
-		public ThunkResult<TResult> Dispatch<<#=typeArgs#>, TResult>(Func<<#=funcParams#>, Task<TResult>> work, <#=methodParams#>)
+		public ThunkResult<TResult> Dispatch<<#=typeArgs#>, TResult>(Func<<#=funcParams#>, Task<TResult>> work, <#=methodParams#>, CancellationToken cancellationToken = default)
 		{
-			return Dispatch(string.Empty, work, <#=args#>);
+			return Dispatch(string.Empty, work, <#=args#>, cancellationToken);
 		}
 
-		public ThunkResult<TResult> Dispatch<<#=typeArgs#>, TResult>(string actionName, Func<<#=funcParams#>, Task<TResult>> work, <#=methodParams#>)
+		public ThunkResult<TResult> Dispatch<<#=typeArgs#>, TResult>(string actionName, Func<<#=funcParams#>, Task<TResult>> work, <#=methodParams#>, CancellationToken cancellationToken = default)
 		{
-			return _store.DispatchThunk(new ThunkFunc<<#=funcParams#>, TResult>(actionName, work).Bind(<#=args#>));
+			return _store.DispatchThunk(new ThunkFunc<<#=funcParams#>, TResult>(actionName, work).Bind(<#=args#>), cancellationToken);
+		}
+<#
+	}
+#>
+
+		public ThunkResult DispatchLatest(string cancellationGroup, CallableThunkAction<TApi> thunk, CancellationToken cancellationToken = default) => _store.DispatchThunkLatest(cancellationGroup, thunk, cancellationToken);
+		public ThunkResult DispatchLatest(string cancellationGroup, ThunkAction<TApi> thunk, CancellationToken cancellationToken = default) => DispatchLatest(cancellationGroup, thunk.Bind(), cancellationToken);
+		public ThunkResult DispatchLatest(string cancellationGroup, string actionName, Func<TApi, Task> work, CancellationToken cancellationToken = default) => DispatchLatest(cancellationGroup, new ThunkAction<TApi>(actionName ?? string.Empty, work).Bind(), cancellationToken);
+		public ThunkResult DispatchLatest(string cancellationGroup, Func<TApi, Task> work, CancellationToken cancellationToken = default) => DispatchLatest(cancellationGroup, string.Empty, work, cancellationToken);
+
+		public ThunkResult<TResult> DispatchLatest<TResult>(string cancellationGroup, CallableThunkFunc<TApi, TResult> thunk, CancellationToken cancellationToken = default) => _store.DispatchThunkLatest(cancellationGroup, thunk, cancellationToken);
+		public ThunkResult<TResult> DispatchLatest<TResult>(string cancellationGroup, ThunkFunc<TApi, TResult> thunk, CancellationToken cancellationToken = default) => DispatchLatest(cancellationGroup, thunk.Bind(), cancellationToken);
+		public ThunkResult<TResult> DispatchLatest<TResult>(string cancellationGroup, string actionName, Func<TApi, Task<TResult>> work, CancellationToken cancellationToken = default) => DispatchLatest(cancellationGroup, new ThunkFunc<TApi, TResult>(actionName ?? string.Empty, work), cancellationToken);
+		public ThunkResult<TResult> DispatchLatest<TResult>(string cancellationGroup, Func<TApi, Task<TResult>> work, CancellationToken cancellationToken = default) => DispatchLatest(cancellationGroup, string.Empty, work, cancellationToken);
+<#
+	for (var i = 1; i <= 7; i++)
+	{
+		var typeArgs = Repeat(i, "TArg{i}");
+		var funcParams = "TApi, " + Repeat(i, "TArg{i}");
+		var methodParams = Repeat(i, "TArg{i} arg{i}");
+		var args = Repeat(i, "arg{i}");
+#>
+		public ThunkResult DispatchLatest<<#=typeArgs#>>(string cancellationGroup, ThunkAction<<#=funcParams#>> thunk, <#=methodParams#>, CancellationToken cancellationToken = default)
+		{
+			return _store.DispatchThunkLatest(cancellationGroup, thunk.Bind(<#=args#>), cancellationToken);
+		}
+
+		public ThunkResult DispatchLatest<<#=typeArgs#>>(string cancellationGroup, Func<<#=funcParams#>, Task> work, <#=methodParams#>, CancellationToken cancellationToken = default)
+		{
+			return DispatchLatest(cancellationGroup, string.Empty, work, <#=args#>, cancellationToken);
+		}
+
+		public ThunkResult DispatchLatest<<#=typeArgs#>>(string cancellationGroup, string actionName, Func<<#=funcParams#>, Task> work, <#=methodParams#>, CancellationToken cancellationToken = default)
+		{
+			return _store.DispatchThunkLatest(cancellationGroup, new ThunkAction<<#=funcParams#>>(actionName, work).Bind(<#=args#>), cancellationToken);
+		}
+
+		public ThunkResult<TResult> DispatchLatest<<#=typeArgs#>, TResult>(string cancellationGroup, ThunkFunc<<#=funcParams#>, TResult> thunk, <#=methodParams#>, CancellationToken cancellationToken = default)
+		{
+			return _store.DispatchThunkLatest(cancellationGroup, thunk.Bind(<#=args#>), cancellationToken);
+		}
+
+		public ThunkResult<TResult> DispatchLatest<<#=typeArgs#>, TResult>(string cancellationGroup, Func<<#=funcParams#>, Task<TResult>> work, <#=methodParams#>, CancellationToken cancellationToken = default)
+		{
+			return DispatchLatest(cancellationGroup, string.Empty, work, <#=args#>, cancellationToken);
+		}
+
+		public ThunkResult<TResult> DispatchLatest<<#=typeArgs#>, TResult>(string cancellationGroup, string actionName, Func<<#=funcParams#>, Task<TResult>> work, <#=methodParams#>, CancellationToken cancellationToken = default)
+		{
+			return _store.DispatchThunkLatest(cancellationGroup, new ThunkFunc<<#=funcParams#>, TResult>(actionName, work).Bind(<#=args#>), cancellationToken);
 		}
 <#
 	}

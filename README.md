@@ -26,8 +26,11 @@ Action  →  Reducer  →  New State  →  Subscribers notified
 | **Store** | Immutable state container with synchronous dispatch and observable state |
 | **Feature reducers** | Fluent, type-safe reducers per state slice with `FeatureReducer.Build(...).On<TAction>(...)` |
 | **Memoized selectors** | Composable selectors (up to 7 inputs) that only recompute when inputs change, with custom comparers |
+| **Middleware** | Intercept, rewrite, guard, or short-circuit every dispatch before it reaches reducers |
+| **Batching** | `store.Batch(...)` coalesces multiple dispatches into a single state notification |
 | **Effects** | Rx pipelines that react to dispatched actions — API calls, logging, navigation — decoupled from reducers |
 | **Thunks** | Async work units with named lifecycle actions, results, nesting, and dependency injection via custom `ThunkApi` |
+| **Cancellation** | Cancellable thunks with cancellation groups (take-latest) and declarative effect strategies (`TakeLatest`, `TakeEvery`, `Exhaust`, debounce/throttle) |
 | **DataTable** | Immutable normalized entity collection (`ById` + `AllIds`) for list/entity state |
 | **Assembly registration** | Auto-discover and register reducers and effects from an assembly |
 | **DI friendly** | Works with `Microsoft.Extensions.DependencyInjection` out of the box |
@@ -80,10 +83,13 @@ store.Select(s => s.GetFeatureState<PersonState>())
 |----------|-------------|
 | [Getting Started](docs/getting-started.md) | Core concepts, wiring up a store, DI integration, project layout |
 | [Actions](docs/actions.md) | Action objects, the action stream, named actions with `IAction` |
+| [Middleware](docs/middleware.md) | Intercepting, rewriting, and guarding dispatches before reducers |
+| [Batching](docs/batching.md) | Coalescing multiple dispatches into one state notification |
 | [Reducers](docs/reducers.md) | Feature reducers, action handlers, factories, and immutability patterns |
 | [Selectors](docs/selectors.md) | Memoized, composable selectors and reactive state queries |
 | [Effects](docs/effects.md) | Rx-based side-effect pipelines triggered by actions |
 | [Thunks](docs/thunks.md) | Async work with lifecycle actions, results, and nesting |
+| [Cancellation](docs/cancellation.md) | Cancellable thunks, cancellation groups, and effect strategies |
 | [Custom Thunk API](docs/custom-thunk-api.md) | Injecting services into thunks with `ThunkApi` subclasses |
 | [DataTable](docs/datatable.md) | Normalized, immutable entity collections |
 | [Reactive Programming](docs/reactive-programming.md) | How Rx is used throughout the library |

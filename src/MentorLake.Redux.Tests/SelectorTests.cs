@@ -138,7 +138,6 @@ public class SelectorTests
 		_store.Dispatch(new UpdateLastNameAction("Changed"));
 		_store.Dispatch(new UpdateFirstNameAction("Bob"));
 
-		// initial + first-name change only
 		Assert.AreEqual(2, emissions.Count);
 		Assert.AreEqual("Hello", emissions[0].FirstName);
 		Assert.AreEqual("Bob", emissions[1].FirstName);
@@ -170,7 +169,6 @@ public class SelectorTests
 		var selector = listSelector.WithSequenceComparer((a, b) => a == b);
 		using var _ = _store.Select(selector).Subscribe(emissions.Add);
 
-		// Same logical content after a no-op-like path is hard; dispatch a real change
 		_store.Dispatch(new UpdateFirstNameAction("Bob"));
 
 		Assert.IsTrue(emissions.Count >= 2);

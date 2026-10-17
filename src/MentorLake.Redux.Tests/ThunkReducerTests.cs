@@ -105,7 +105,6 @@ public class ThunkReducerTests
 	[TestMethod]
 	public async Task Reducer_ListeningToThunkFulfilled_SubstringThunkNameDoesNotCauseFalseMatch()
 	{
-		// "Thunk/fulfilled" should NOT match when action name is "LongerThunk/fulfilled"
 		_store.RegisterReducers(
 			FeatureReducer.Build(new ThunkState())
 				.On<ThunkFulfilled>("Thunk/fulfilled", (s, _) => new ThunkState { CallCount = s.CallCount + 1 }));

@@ -2,14 +2,16 @@ using System.Reactive.Subjects;
 
 namespace MentorLake.Redux.Thunks;
 
-public partial class ThunkApi(Subject<object> actionDispatcher, ReduxStore store)
+public partial class ThunkApi(Subject<object> actionDispatcher, ReduxStore store, CancellationToken cancellationToken = default)
 {
 	public ThunkApi(ThunkApiContext context)
-		: this(context.ActionDispatcher, context.Store)
+		: this(context.ActionDispatcher, context.Store, context.CancellationToken)
 	{
 	}
 
 	public StoreState State => store.State;
+
+	public CancellationToken CancellationToken => cancellationToken;
 
 	public void Dispatch(object action)
 	{

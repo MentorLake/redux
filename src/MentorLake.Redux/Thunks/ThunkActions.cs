@@ -11,6 +11,11 @@ public class ThunkRejected(string actionName, Exception exception)  : IAction
 	public string ActionName => $"{actionName}/rejected";
 }
 
+public class ThunkCancelled(string actionName) : IAction
+{
+	public string ActionName => $"{actionName}/cancelled";
+}
+
 public class ThunkFulfilled<TResult>(string actionName, TResult result) : ThunkFulfilled(actionName)
 {
 	public TResult Result => result;

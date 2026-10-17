@@ -11,6 +11,7 @@ Thunks are units of asynchronous work that run against the store. Unlike [effect
 - [Thunk Reducers](#thunk-reducers)
 - [Nested Thunks](#nested-thunks)
 - [Error Handling](#error-handling)
+- [Cancellation](#cancellation)
 
 ## Why Thunks
 
@@ -152,43 +153,54 @@ store.DispatchThunk(async (api, userId) =>
 store.DispatchThunk(LoadUser, 42);
 ```
 
-`DispatchThunk` returns immediately with a `ThunkResult`. It does **not** block the calling thread, and it is unrelated to `store.Dispatch` (which is synchronous and for plain actions).
+`DispatchThunk` starts the run immediately and returns a `ThunkResult` without blocking the calling thread (see [Thunks Run Immediately](#thunks-run-immediately)). It is unrelated to `store.Dispatch` (which is synchronous and for plain actions).
 
-### Thunks Run on Subscription
+### Thunks Run Immediately
 
-The work inside a thunk does **not** start when you call `DispatchThunk`. A `ThunkResult` wraps a *cold* observable: nothing happens until something subscribes to its `Actions` stream. This gives you the chance to attach observers before any lifecycle actions (or the work itself) begin.
+Calling `DispatchThunk` starts the work right away — you do **not** need to subscribe first. The run is asynchronous: `DispatchThunk` hands back a `ThunkResult` without blocking, while the work proceeds in the background and dispatches its lifecycle actions into the store.
 
-The easiest way to start a thunk is to call `ToTask()` and await it — `ToTask()` subscribes to the observable and completes when the thunk fulfills or rejects:
-
-```csharp
-// Subscribes via ToTask(), so the thunk actually runs
-await store.DispatchThunk(MyThunks.LoadUser, 42).ToTask();
-```
-
-Subscribing to `Actions` also starts the run:
+`ThunkResult.Actions` is a *hot, replaying* stream of that single run. You subscribe to **observe** it, not to start it:
 
 ```csharp
-// Subscribes via Subscribe(), so the thunk runs
+// The thunk is already running; this just observes it
 store.DispatchThunk(MyThunks.LoadUser, 42).Actions
     .Subscribe(action => Console.WriteLine(action));
 ```
 
-Calling `DispatchThunk` and ignoring the result does **nothing** — the thunk never executes:
+Because the stream replays, the timing of your subscription doesn't matter — an observer that attaches after the run has begun (or even finished) still receives the lifecycle actions it missed:
 
 ```csharp
-// Does NOT run — no one ever subscribed
-store.DispatchThunk(MyThunks.LoadUser, 42);
+var result = store.DispatchThunk(MyThunks.LoadUser, 42); // runs now
+
+// ... later, after the work has already completed ...
+var fulfilled = await result.Actions
+    .Action<ThunkFulfilled>("LoadUser/fulfilled")
+    .FirstAsync(); // still delivered, thanks to replay
 ```
 
-If you want fire-and-forget execution, discard the task from `ToTask()`:
+Subscribing more than once — or calling `ToTask()` in addition to `Subscribe()` — observes the *same* run. It never re-executes the work or re-dispatches its actions. To run the work again, call `DispatchThunk` again; each call is a fresh run:
 
 ```csharp
-_ = store.DispatchThunk(MyThunks.LoadUser, 42).ToTask();
+var result = store.DispatchThunk(MyThunks.LoadUser, 42);
+result.Actions.Subscribe(log);      // run #1
+result.Actions.Subscribe(metrics);  // still run #1 — shared
+result.ToTask();                    // still run #1 — shared
+
+store.DispatchThunk(MyThunks.LoadUser, 42); // run #2 — a separate execution
 ```
+
+Since dispatch already runs the thunk, ignoring the result is a legitimate fire-and-forget:
+
+```csharp
+// Runs in the background; nothing to await
+store.DispatchThunk(MyThunks.LogEvent, payload);
+```
+
+Use `ToTask()` when you want to await completion or the return value (see below).
 
 ## Awaiting Results
 
-`ThunkResult` converts to a `Task` when you want to await completion or a return value. Calling `ToTask()` subscribes to the run's observable, which is what actually starts the thunk (see [Thunks Run on Subscription](#thunks-run-on-subscription)):
+`ThunkResult` converts to a `Task` when you want to await completion or a return value. The run has already started at dispatch; `ToTask()` simply observes it and completes when the thunk fulfills or rejects (see [Thunks Run Immediately](#thunks-run-immediately)):
 
 ```csharp
 // Await completion (throws the rejection exception, if any)
@@ -225,7 +237,7 @@ store.DispatchThunk(MyThunks.ThunkWithArgAndReturnValue, 123).Actions
     .Subscribe(action => Console.WriteLine("My action received!"));
 ```
 
-This is useful for one-shot coordination ("when this run finishes, do X") without adding global reducers. Note each call to `DispatchThunk` starts a **new run** with its own stream — subscribe to the result you want, not a second dispatch.
+This is useful for one-shot coordination ("when this run finishes, do X") without adding global reducers. The run starts when you call `DispatchThunk`, not when you subscribe, and every subscription to the same `ThunkResult` shares that one run — so observe the result you already dispatched rather than dispatching again just to attach another observer.
 
 ## Thunk Reducers
 
@@ -299,8 +311,25 @@ catch (ApiException ex)
 
 Prefer letting exceptions propagate to lifecycle handling over swallowing them inside the work function.
 
+## Cancellation
+
+Every thunk can observe `api.CancellationToken`. Pass it to async work and cancel with `Cancel()` on the `ThunkResult`, or use `DispatchThunkLatest` to cancel the previous thunk in a named group (take-latest):
+
+```csharp
+var result = store.DispatchThunk(async api =>
+    await http.Search(term, api.CancellationToken));
+result.Cancel();
+
+// supersede the previous "search" thunk automatically
+store.DispatchThunkLatest("search", async api =>
+    await http.Search(term, api.CancellationToken));
+```
+
+A cancelled thunk dispatches `ThunkCancelled` (`{actionName}/cancelled`) instead of `fulfilled`/`rejected`, and `ToTask()` throws `OperationCanceledException`. See [Cancellation](cancellation.md) for details.
+
 ## See Also
 
 - [Custom Thunk API](custom-thunk-api.md) — injecting services into thunks
+- [Cancellation](cancellation.md) — cancellation tokens, groups, and lifecycle
 - [Effects](effects.md) — reactive (non-initiated) side effects
 - [Reducers](reducers.md) — handling lifecycle actions

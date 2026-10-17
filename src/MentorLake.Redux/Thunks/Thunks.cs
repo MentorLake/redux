@@ -1,7 +1,6 @@
 
 namespace MentorLake.Redux.Thunks;
 
-
 public readonly struct ThunkAction<TApi>(string actionName, Func<TApi, Task> work) where TApi : ThunkApi
 {
 	public string ActionName => actionName;
@@ -36,6 +35,10 @@ public readonly struct CallableThunkAction<TApi>(string actionName, Func<TApi, T
 			await work(api);
 			api.Dispatch(new ThunkFulfilled(actionName));
 		}
+		catch (OperationCanceledException)
+		{
+			api.Dispatch(new ThunkCancelled(actionName));
+		}
 		catch (Exception e)
 		{
 			api.Dispatch(new ThunkRejected(actionName, e));
@@ -54,6 +57,10 @@ public readonly struct CallableThunkFunc<TApi, TResult>(string actionName, Func<
 			api.Dispatch(new ThunkPending(actionName));
 			var result = await work(api);
 			api.Dispatch(new ThunkFulfilled<TResult>(actionName, result));
+		}
+		catch (OperationCanceledException)
+		{
+			api.Dispatch(new ThunkCancelled(actionName));
 		}
 		catch (Exception e)
 		{
@@ -96,6 +103,10 @@ public readonly struct CallableThunkAction<TApi, TArg1>(string actionName, Func<
 			await work(api, arg1);
 			api.Dispatch(new ThunkFulfilled(actionName));
 		}
+		catch (OperationCanceledException)
+		{
+			api.Dispatch(new ThunkCancelled(actionName));
+		}
 		catch (Exception e)
 		{
 			api.Dispatch(new ThunkRejected(actionName, e));
@@ -113,13 +124,16 @@ public readonly struct CallableThunkFunc<TApi, TArg1, TResult>(string actionName
 			var result = await work(api, arg1);
 			api.Dispatch(new ThunkFulfilled<TResult>(actionName, result));
 		}
+		catch (OperationCanceledException)
+		{
+			api.Dispatch(new ThunkCancelled(actionName));
+		}
 		catch (Exception e)
 		{
 			api.Dispatch(new ThunkRejected(actionName, e));
 		}
 	}
 }
-
 
 public readonly struct ThunkAction<TApi, TArg1,TArg2>(string actionName, Func<TApi, TArg1,TArg2, Task> work) where TApi : ThunkApi
 {
@@ -153,6 +167,10 @@ public readonly struct CallableThunkAction<TApi, TArg1,TArg2>(string actionName,
 			await work(api, arg1,arg2);
 			api.Dispatch(new ThunkFulfilled(actionName));
 		}
+		catch (OperationCanceledException)
+		{
+			api.Dispatch(new ThunkCancelled(actionName));
+		}
 		catch (Exception e)
 		{
 			api.Dispatch(new ThunkRejected(actionName, e));
@@ -170,13 +188,16 @@ public readonly struct CallableThunkFunc<TApi, TArg1,TArg2, TResult>(string acti
 			var result = await work(api, arg1,arg2);
 			api.Dispatch(new ThunkFulfilled<TResult>(actionName, result));
 		}
+		catch (OperationCanceledException)
+		{
+			api.Dispatch(new ThunkCancelled(actionName));
+		}
 		catch (Exception e)
 		{
 			api.Dispatch(new ThunkRejected(actionName, e));
 		}
 	}
 }
-
 
 public readonly struct ThunkAction<TApi, TArg1,TArg2,TArg3>(string actionName, Func<TApi, TArg1,TArg2,TArg3, Task> work) where TApi : ThunkApi
 {
@@ -210,6 +231,10 @@ public readonly struct CallableThunkAction<TApi, TArg1,TArg2,TArg3>(string actio
 			await work(api, arg1,arg2,arg3);
 			api.Dispatch(new ThunkFulfilled(actionName));
 		}
+		catch (OperationCanceledException)
+		{
+			api.Dispatch(new ThunkCancelled(actionName));
+		}
 		catch (Exception e)
 		{
 			api.Dispatch(new ThunkRejected(actionName, e));
@@ -227,13 +252,16 @@ public readonly struct CallableThunkFunc<TApi, TArg1,TArg2,TArg3, TResult>(strin
 			var result = await work(api, arg1,arg2,arg3);
 			api.Dispatch(new ThunkFulfilled<TResult>(actionName, result));
 		}
+		catch (OperationCanceledException)
+		{
+			api.Dispatch(new ThunkCancelled(actionName));
+		}
 		catch (Exception e)
 		{
 			api.Dispatch(new ThunkRejected(actionName, e));
 		}
 	}
 }
-
 
 public readonly struct ThunkAction<TApi, TArg1,TArg2,TArg3,TArg4>(string actionName, Func<TApi, TArg1,TArg2,TArg3,TArg4, Task> work) where TApi : ThunkApi
 {
@@ -267,6 +295,10 @@ public readonly struct CallableThunkAction<TApi, TArg1,TArg2,TArg3,TArg4>(string
 			await work(api, arg1,arg2,arg3,arg4);
 			api.Dispatch(new ThunkFulfilled(actionName));
 		}
+		catch (OperationCanceledException)
+		{
+			api.Dispatch(new ThunkCancelled(actionName));
+		}
 		catch (Exception e)
 		{
 			api.Dispatch(new ThunkRejected(actionName, e));
@@ -284,13 +316,16 @@ public readonly struct CallableThunkFunc<TApi, TArg1,TArg2,TArg3,TArg4, TResult>
 			var result = await work(api, arg1,arg2,arg3,arg4);
 			api.Dispatch(new ThunkFulfilled<TResult>(actionName, result));
 		}
+		catch (OperationCanceledException)
+		{
+			api.Dispatch(new ThunkCancelled(actionName));
+		}
 		catch (Exception e)
 		{
 			api.Dispatch(new ThunkRejected(actionName, e));
 		}
 	}
 }
-
 
 public readonly struct ThunkAction<TApi, TArg1,TArg2,TArg3,TArg4,TArg5>(string actionName, Func<TApi, TArg1,TArg2,TArg3,TArg4,TArg5, Task> work) where TApi : ThunkApi
 {
@@ -324,6 +359,10 @@ public readonly struct CallableThunkAction<TApi, TArg1,TArg2,TArg3,TArg4,TArg5>(
 			await work(api, arg1,arg2,arg3,arg4,arg5);
 			api.Dispatch(new ThunkFulfilled(actionName));
 		}
+		catch (OperationCanceledException)
+		{
+			api.Dispatch(new ThunkCancelled(actionName));
+		}
 		catch (Exception e)
 		{
 			api.Dispatch(new ThunkRejected(actionName, e));
@@ -341,13 +380,16 @@ public readonly struct CallableThunkFunc<TApi, TArg1,TArg2,TArg3,TArg4,TArg5, TR
 			var result = await work(api, arg1,arg2,arg3,arg4,arg5);
 			api.Dispatch(new ThunkFulfilled<TResult>(actionName, result));
 		}
+		catch (OperationCanceledException)
+		{
+			api.Dispatch(new ThunkCancelled(actionName));
+		}
 		catch (Exception e)
 		{
 			api.Dispatch(new ThunkRejected(actionName, e));
 		}
 	}
 }
-
 
 public readonly struct ThunkAction<TApi, TArg1,TArg2,TArg3,TArg4,TArg5,TArg6>(string actionName, Func<TApi, TArg1,TArg2,TArg3,TArg4,TArg5,TArg6, Task> work) where TApi : ThunkApi
 {
@@ -381,6 +423,10 @@ public readonly struct CallableThunkAction<TApi, TArg1,TArg2,TArg3,TArg4,TArg5,T
 			await work(api, arg1,arg2,arg3,arg4,arg5,arg6);
 			api.Dispatch(new ThunkFulfilled(actionName));
 		}
+		catch (OperationCanceledException)
+		{
+			api.Dispatch(new ThunkCancelled(actionName));
+		}
 		catch (Exception e)
 		{
 			api.Dispatch(new ThunkRejected(actionName, e));
@@ -398,13 +444,16 @@ public readonly struct CallableThunkFunc<TApi, TArg1,TArg2,TArg3,TArg4,TArg5,TAr
 			var result = await work(api, arg1,arg2,arg3,arg4,arg5,arg6);
 			api.Dispatch(new ThunkFulfilled<TResult>(actionName, result));
 		}
+		catch (OperationCanceledException)
+		{
+			api.Dispatch(new ThunkCancelled(actionName));
+		}
 		catch (Exception e)
 		{
 			api.Dispatch(new ThunkRejected(actionName, e));
 		}
 	}
 }
-
 
 public readonly struct ThunkAction<TApi, TArg1,TArg2,TArg3,TArg4,TArg5,TArg6,TArg7>(string actionName, Func<TApi, TArg1,TArg2,TArg3,TArg4,TArg5,TArg6,TArg7, Task> work) where TApi : ThunkApi
 {
@@ -438,6 +487,10 @@ public readonly struct CallableThunkAction<TApi, TArg1,TArg2,TArg3,TArg4,TArg5,T
 			await work(api, arg1,arg2,arg3,arg4,arg5,arg6,arg7);
 			api.Dispatch(new ThunkFulfilled(actionName));
 		}
+		catch (OperationCanceledException)
+		{
+			api.Dispatch(new ThunkCancelled(actionName));
+		}
 		catch (Exception e)
 		{
 			api.Dispatch(new ThunkRejected(actionName, e));
@@ -454,6 +507,10 @@ public readonly struct CallableThunkFunc<TApi, TArg1,TArg2,TArg3,TArg4,TArg5,TAr
 			api.Dispatch(new ThunkPending(actionName));
 			var result = await work(api, arg1,arg2,arg3,arg4,arg5,arg6,arg7);
 			api.Dispatch(new ThunkFulfilled<TResult>(actionName, result));
+		}
+		catch (OperationCanceledException)
+		{
+			api.Dispatch(new ThunkCancelled(actionName));
 		}
 		catch (Exception e)
 		{

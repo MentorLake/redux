@@ -7,6 +7,7 @@ Effects are Rx pipelines that react to dispatched actions and run side effects �
 - [Dispatching from Effects](#dispatching-from-effects)
 - [Registration](#registration)
 - [Rx Patterns for Effects](#rx-patterns-for-effects)
+- [Cancellation Strategies](#cancellation-strategies)
 - [Error Handling and Retry](#error-handling-and-retry)
 - [Best Practices](#best-practices)
 
@@ -144,6 +145,28 @@ EffectsFactory.Create(actions => actions
     new EffectConfig { Dispatch = true })
 ```
 
+## Cancellation Strategies
+
+When a new trigger arrives while an effect's work is still running, the strategy decides what happens. Build effects fluently with `Effect.Build()`:
+
+```csharp
+Effect.Build()
+    .On<SearchAction>()
+    .Debounce(TimeSpan.FromMilliseconds(300))
+    .TakeLatest()   // cancel the previous in-flight search
+    .Handle(action => Observable.FromAsync(ct =>
+        api.Search(((SearchAction) action).Term, ct)))
+    .DispatchResults()
+```
+
+| Strategy | Behavior |
+|----------|----------|
+| `TakeEvery()` | run all occurrences concurrently (default) |
+| `TakeLatest()` | dispose (cancel) in-flight work when a new trigger arrives |
+| `Exhaust()` | ignore new triggers while work is in flight |
+
+`Debounce` and `Throttle` shape the trigger stream before the strategy runs. Cancellation propagates through disposal: the token given to `Observable.FromAsync` inside `Handle` is cancelled, stopping token-aware work. See [Cancellation](cancellation.md) for details.
+
 ## Error Handling and Retry
 
 Registered effects are wrapped in `Retry()`: if an effect's pipeline terminates with an error, it resubscribes to the action stream and continues listening for future actions. However, **the failed pipeline itself is abandoned** — in-flight work in that chain is lost.
@@ -177,5 +200,6 @@ For effects that must surface failures to the store, catch and dispatch a failur
 ## See Also
 
 - [Thunks](thunks.md) — caller-initiated async work
+- [Cancellation](cancellation.md) — strategies, debounce/throttle, and token propagation
 - [Actions](actions.md) — the stream effects observe
 - [Reactive Programming](reactive-programming.md) — Rx concepts used here

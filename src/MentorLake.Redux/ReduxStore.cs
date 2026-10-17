@@ -2,9 +2,9 @@ using System.Reflection;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
 using MentorLake.Redux.Effects;
+using MentorLake.Redux.Middleware;
 using MentorLake.Redux.Reducers;
 using MentorLake.Redux.Selectors;
-using MentorLake.Redux.Thunks;
 
 namespace MentorLake.Redux;
 
@@ -12,79 +12,75 @@ public sealed partial class ReduxStore
 {
 	private readonly Subject<object> _actionDispatcher = new();
 	private readonly List<ActionReducer<StoreState>> _reducers = new();
+	private readonly List<IReduxMiddleware> _middlewares = new();
 	private readonly BehaviorSubject<StoreState> _stateSubject;
-	private readonly Dictionary<Type, Func<ThunkApiContext, ThunkApi>> _thunkApiFactories = new()
-	{
-		[typeof(ThunkApi)] = static ctx => new ThunkApi(ctx)
-	};
+	private NextMiddleware _middlewarePipeline;
+	private int _batchDepth;
+	private bool _batchStateChanged;
 
 	public ReduxStore()
 	{
-		State = new StoreState();
-		_stateSubject = new BehaviorSubject<StoreState>(State);
+		State = new();
+		_stateSubject = new(State);
 	}
 
 	public StoreState State { get; private set; }
 	public IObservable<object> Actions => _actionDispatcher;
 
-	public void RegisterThunkApiFactory<TApi>(Func<ThunkApiContext, TApi> factory) where TApi : ThunkApi
-	{
-		ArgumentNullException.ThrowIfNull(factory);
-		_thunkApiFactories[typeof(TApi)] = ctx => factory(ctx);
-	}
-
-	public ThunkDispatcher<TApi> Using<TApi>() where TApi : ThunkApi
-	{
-		return new ThunkDispatcher<TApi>(this);
-	}
-
 	public void Dispatch(object action)
 	{
 		if (action == null) return;
-		ProcessActionQueue(action);
+		(_middlewarePipeline ??= BuildMiddlewarePipeline())(action);
 	}
 
-	public ThunkResult DispatchThunk<TApi>(ICallableThunkAction<TApi> thunk) where TApi : ThunkApi
+	public void UseMiddleware(params IReduxMiddleware[] middlewares)
 	{
-		return new ThunkResult { Actions = CreateThunkObservable(thunk) };
-	}
-
-	public ThunkResult<TResult> DispatchThunk<TApi, TResult>(ICallableThunkFunc<TApi, TResult> thunk) where TApi : ThunkApi
-	{
-		return new ThunkResult<TResult> { Actions = CreateThunkObservable(thunk) };
-	}
-
-	private IObservable<object> CreateThunkObservable<TApi>(ICallableThunkAction<TApi> thunk, TApi api = null) where TApi : ThunkApi
-	{
-		return Observable.Create<object>(observer =>
+		ArgumentNullException.ThrowIfNull(middlewares);
+		foreach (var middleware in middlewares)
 		{
-			var localActionDispatcher = new Subject<object>();
-			api ??= CreateThunkApi<TApi>(localActionDispatcher);
-
-			var subscription = localActionDispatcher
-				.Do(Dispatch)
-				.TakeUntil(a => a is ThunkFulfilled or ThunkRejected)
-				.Subscribe(observer);
-
-			_ = thunk.ExecuteAsync(api);
-			return subscription;
-		});
-	}
-
-	private TApi CreateThunkApi<TApi>(Subject<object> actionDispatcher) where TApi : ThunkApi
-	{
-		var context = new ThunkApiContext(actionDispatcher, this);
-		var apiType = typeof(TApi);
-
-		if (_thunkApiFactories.TryGetValue(apiType, out var factory))
-		{
-			return (TApi)factory(context);
+			ArgumentNullException.ThrowIfNull(middleware);
+			middleware.Initialize(this);
+			_middlewares.Add(middleware);
 		}
 
-		throw new InvalidOperationException($"No factory registered for {apiType.FullName}");
+		_middlewarePipeline = null;
 	}
 
-	private void ProcessActionQueue(object action)
+	public void Batch(Action batch)
+	{
+		ArgumentNullException.ThrowIfNull(batch);
+
+		try
+		{
+			_batchDepth++;
+			batch();
+		}
+		finally
+		{
+			_batchDepth--;
+
+			if (_batchDepth == 0 && _batchStateChanged)
+			{
+				_batchStateChanged = false;
+				_stateSubject.OnNext(State);
+			}
+		}
+	}
+
+	private NextMiddleware BuildMiddlewarePipeline()
+	{
+		NextMiddleware pipeline = ReduceAndNotify;
+		for (var i = _middlewares.Count - 1; i >= 0; i--)
+		{
+			var middleware = _middlewares[i];
+			var next = pipeline;
+			pipeline = action => middleware.Invoke(action, next);
+		}
+
+		return pipeline;
+	}
+
+	private void ReduceAndNotify(object action)
 	{
 		UpdateState(Reduce(State, action));
 		_actionDispatcher.OnNext(action);
@@ -185,7 +181,13 @@ public sealed partial class ReduxStore
 	private void UpdateState(StoreState state)
 	{
 		State = state;
-		_stateSubject.OnNext(State);
+		if (_batchDepth > 0)
+		{
+			_batchStateChanged = true;
+			return;
+		}
+
+		_stateSubject.OnNext(state);
 	}
 
 	public IObservable<TResult> Select<TResult>(Func<StoreState, TResult> selector)
