@@ -190,6 +190,7 @@ store.Select(MySelectors.User)
 ## See Also
 
 - [Threading](threading.md) — the single-threaded core and thread-safe dispatch
+- [Slow Consumers](slow-consumers.md) — backpressure patterns for slow subscribers
 - [Effects](effects.md) — pipelines in practice
 - [Selectors](selectors.md) — memoization and deduplication
 - [Thunks](thunks.md) — task/observable bridging for async work

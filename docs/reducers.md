@@ -154,11 +154,12 @@ FeatureReducer.Build(new UsersState(new DataTable<int, User>()))
 ## Rules and Gotchas
 
 1. **Handlers must be pure.** No HTTP, no file access, no `DateTime.Now`, no captured mutable state. Effects and thunks exist for anything impure.
-2. **Handlers run synchronously during `Dispatch`.** A slow handler blocks the dispatcher; move work off-thread.
-3. **All matching reducers run.** If two features handle the same action, both update — this is a feature, not a bug, but be deliberate about it.
-4. **Return new instances when data changes.** Because change detection is reference/value based, mutating a list in place means selectors will never notice.
-5. **Feature state types are keys.** Two features cannot share the same CLR state type; give each slice its own record type.
-6. **Initial state is registered once.** Re-registering a reducer resets that feature's state.
+2. **All matching reducers run.** If two features handle the same action, both update — this is a feature, not a bug, but be deliberate about it.
+3. **Return new instances when data changes.** Because change detection is reference/value based, mutating a list in place means selectors will never notice.
+4. **Feature state types are keys.** Two features cannot share the same CLR state type; give each slice its own record type.
+5. **Initial state is registered once.** Re-registering a reducer resets that feature's state.
+
+Handlers run on the store's processor thread, so keep them fast — see [Threading](threading.md) for why slow code there delays every dispatch.
 
 ## See Also
 

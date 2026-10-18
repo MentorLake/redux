@@ -147,15 +147,29 @@ public class Demo
 	public void EffectsDispatch()
 	{
 		var actions = new List<object>();
-		using var _ = _store.Actions.Subscribe(actions.Add);
+		var settled = new ManualResetEventSlim();
+		using var _ = _store.Actions.Subscribe(a =>
+		{
+			lock (actions)
+			{
+				actions.Add(a);
+				if (a is SomeOtherAction) { settled.Set(); }
+			}
+		});
 
-		Console.WriteLine("Dispatching SavePersonWithDispatchAction");
 		_store.Dispatch(new SavePersonWithDispatchAction(new PersonState("Hello", "World")));
-		Console.WriteLine("COMPLETE Dispatching SavePersonWithDispatchAction");
-		Assert.AreEqual(3, actions.Count);
-		Assert.AreEqual(1, actions.OfType<SavePersonWithDispatchAction>().Count());
-		Assert.AreEqual(1, actions.OfType<SavePersonCompleteAction>().Count());
-		Assert.AreEqual(1, actions.OfType<SomeOtherAction>().Count());
+
+		// The effect's follow-up actions are queued, not settled by Dispatch (see
+		// docs/threading.md, "What Dispatch does not wait for") — wait for the cascade.
+		Assert.IsTrue(settled.Wait(TimeSpan.FromSeconds(2)), "effect cascade did not settle");
+
+		lock (actions)
+		{
+			Assert.AreEqual(3, actions.Count);
+			Assert.AreEqual(1, actions.OfType<SavePersonWithDispatchAction>().Count());
+			Assert.AreEqual(1, actions.OfType<SavePersonCompleteAction>().Count());
+			Assert.AreEqual(1, actions.OfType<SomeOtherAction>().Count());
+		}
 	}
 
 	[TestMethod]

@@ -167,7 +167,7 @@ store.Select(s => s.GetFeatureState<PersonState>().LastName)
     .Subscribe(Console.WriteLine);
 ```
 
-Both emit the current value immediately upon subscription, then again only when the projected value changes. In components (Blazor, MAUI, WPF view models), subscribe and dispose with the component lifetime:
+Both emit the current value immediately upon subscription, then again only when the projected value changes. **The handler runs on the store's processor thread** — keep it trivial, or marshal off with `ObserveOn` first (see [Threading](threading.md)). If the projected value changes faster than you can handle it, pick a strategy from [Slow Consumers](slow-consumers.md) before subscribing. In components (Blazor, MAUI, WPF view models), subscribe and dispose with the component lifetime:
 
 ```csharp
 IDisposable subscription = store.Select(MySelectors.FullName)
@@ -194,5 +194,7 @@ var fullName = MySelectors.FullName.Apply(store.State);
 ## See Also
 
 - [Getting Started](getting-started.md) — where selectors fit in the loop
+- [Threading](threading.md) — why selector handlers run on the processor thread
+- [Slow Consumers](slow-consumers.md) — handling selector updates faster than you can process them
 - [DataTable](datatable.md) — normalized data that pairs well with selectors
 - [Testing](testing.md) — asserting memoization behavior

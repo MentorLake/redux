@@ -72,6 +72,8 @@ store.Select(MySelectors.Report)
 
 The selector itself still evaluates on the processor thread (cheap and pure), but everything downstream of `ObserveOn` runs on your thread. Without it, every subscriber is implicitly a middleware: slow code there delays every dispatch in the application.
 
+If your subscriber is slower than the dispatch rate, `ObserveOn` alone just moves the queue — see [Slow Consumers](slow-consumers.md) for the full set of strategies (`Concat`, `Switch`, `Sample`).
+
 ### Write reducers as pure functions
 
 Reducers are `(state, action) => newState`. Same inputs, same output, no I/O, no ambient state, no mutation. Return updated copies (`with` expressions, new collections) so the store's reference-comparison change detection works.
@@ -178,6 +180,8 @@ Once disposal begins, queued actions are drained, but new dispatches throw `Obje
 ## See Also
 
 - [Threading](threading.md) — why the store behaves this way
+- [Blazor View Models](blazor-viewmodels.md) — the component subscription pattern
+- [Slow Consumers](slow-consumers.md) — backpressure patterns for slow subscribers
 - [Error Handling](error-handling.md) — the failure model in detail
 - [Batching](batching.md) — atomic multi-action dispatch
 - [Middleware](middleware.md) — the synchronous pipeline stage

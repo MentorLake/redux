@@ -87,6 +87,7 @@ store.Select(s => s.GetFeatureState<PersonState>())
 | [Batching](docs/batching.md) | Coalescing multiple dispatches into one state notification |
 | [Threading](docs/threading.md) | The single-threaded core, thread-safe dispatch, and the dispatch contract |
 | [Best Practices](docs/best-practices.md) | Do's and don'ts: middleware, subscribers, `ObserveOn`, async work |
+| [Slow Consumers](docs/slow-consumers.md) | Backpressure patterns: `Concat`, `Switch`, `Sample` |
 | [Error Handling](docs/error-handling.md) | Dispatch failures, the `Errors` stream, and batch failure semantics |
 | [Reducers](docs/reducers.md) | Feature reducers, action handlers, factories, and immutability patterns |
 | [Selectors](docs/selectors.md) | Memoized, composable selectors and reactive state queries |
@@ -97,6 +98,7 @@ store.Select(s => s.GetFeatureState<PersonState>())
 | [DataTable](docs/datatable.md) | Normalized, immutable entity collections |
 | [Reactive Programming](docs/reactive-programming.md) | How Rx is used throughout the library |
 | [Testing](docs/testing.md) | Unit testing reducers, selectors, thunks, and effects |
+| [Blazor View Models](docs/blazor-viewmodels.md) | Component pattern: select, `TakeUntil`, subscribe, dispose |
 
 ## Building from Source
 

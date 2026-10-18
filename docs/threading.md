@@ -48,6 +48,21 @@ The blocking wait is also what makes the store safe to use from UI frameworks: a
 
 **Re-entrancy:** if you call `Dispatch` from inside middleware or a reducer (i.e., on the processor thread), the store detects this and applies the action inline instead of waiting. This is safe — you're already the single thread — and it prevents middleware that dispatches follow-up actions from deadlocking.
 
+### What `Dispatch` does *not* wait for
+
+The contract is **per-dispatch, not per-cascade**. When `Dispatch(action)` returns, *that* action is fully settled — reduced, emitted, notified. Actions that the pipeline re-dispatched as a consequence (an effect with `Dispatch = true` emitting follow-up actions, for example) are queued as new dispatch items and processed on the processor's schedule. They are guaranteed to arrive, but they may arrive *after* the original caller has already woken up.
+
+```csharp
+store.Dispatch(new SavePersonAction(person));
+// SavePersonAction is settled: reduced, emitted, state notified.
+// The effect's SavePersonCompleteAction is queued — but may not have
+// been processed yet. Don't assert on it here.
+```
+
+This is deliberate. A cascade can be arbitrarily long (effect → action → effect → …), so blocking the caller until the whole graph settles would make `Dispatch` latency depend on unrelated downstream work — and would deadlock if any link in the chain ever needs the blocked thread. Classic Redux has the same property: `dispatch` returns after *your* action, and observing derived effects requires a subscription.
+
+If you need to observe a consequence of a dispatch, subscribe to the `Actions` stream (or select the state the consequence produces) rather than assuming the cascade has drained after `Dispatch` returns. A `DispatchAndSettleAsync` primitive that waits for the full cascade is a possible future addition; until then, treat settlement of derived actions as something you await via subscription, not something `Dispatch` promises.
+
 ## What This Means For Your Code
 
 The processor thread is the store's clock. Anything that runs *inside* the pipeline — middleware, reducers, action-stream subscribers, selector subscribers — runs on that clock, and slow or blocking code there delays every dispatch in the application. Anything that runs *outside* it — your threads calling `Dispatch`, thunks, effects — is serialized by the queue and free to take as long as it likes.
@@ -62,5 +77,6 @@ The concrete rules (what to avoid, what to prefer, and why) live in [Best Practi
 ## See Also
 
 - [Best Practices](best-practices.md) — the do's and don'ts in one place
+- [Slow Consumers](slow-consumers.md) — what to do when a subscriber can't keep up
 - [Error Handling](error-handling.md) — how failures flow through the store
 - [Batching](batching.md) — atomic multi-action dispatch
