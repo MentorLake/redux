@@ -28,17 +28,28 @@ public class ConflateLatestTests
 		var scheduler = new EventLoopScheduler();
 		var source = new Subject<int>();
 		var results = new List<int>();
-		using var sub = source.ConflateLatest(scheduler).Subscribe(results.Add);
+		var firstDeliveryStarted = new ManualResetEventSlim(false);
+		var releaseFirstDelivery = new ManualResetEventSlim(false);
+		using var sub = source.ConflateLatest(scheduler).Subscribe(val =>
+		{
+			lock (results) { results.Add(val); }
+			if (val == 1)
+			{
+				firstDeliveryStarted.Set();
+				releaseFirstDelivery.Wait();
+			}
+		});
 
 		source.OnNext(1);
+		Assert.IsTrue(firstDeliveryStarted.Wait(TimeSpan.FromSeconds(2)), "First delivery never started.");
+
+		// 2 and 3 arrive while delivery of 1 is in flight, so 2 is guaranteed to be dropped.
 		source.OnNext(2);
 		source.OnNext(3);
-		await WaitFor(() => results.Count >= 1);
+		releaseFirstDelivery.Set();
 
-		CollectionAssert.Contains(results, 1);
-		CollectionAssert.DoesNotContain(results, 2);
-		await WaitFor(() => results.Last() == 3);
-		Assert.AreEqual(3, results.Last());
+		await WaitFor(() => { lock (results) { return results.Count == 2; } });
+		lock (results) { CollectionAssert.AreEqual(new[] { 1, 3 }, results); }
 	}
 
 	[TestMethod]
@@ -359,17 +370,26 @@ public class ConflateLatestTests
 		var context = new QueuedSynchronizationContext();
 		var source = new Subject<int>();
 		var results = new List<int>();
-		using var sub = source.ConflateLatest(context).Subscribe(results.Add);
+		var firstDeliveryStarted = new ManualResetEventSlim(false);
+		var releaseFirstDelivery = new ManualResetEventSlim(false);
+		using var sub = source.ConflateLatest(context).Subscribe(val =>
+		{
+			lock (results) { results.Add(val); }
+			if (val == 1)
+			{
+				firstDeliveryStarted.Set();
+				releaseFirstDelivery.Wait();
+			}
+		});
 
 		source.OnNext(1);
+		Assert.IsTrue(firstDeliveryStarted.Wait(TimeSpan.FromSeconds(2)), "First delivery never started.");
 		source.OnNext(2);
 		source.OnNext(3);
-		await WaitFor(() => results.Count >= 1);
+		releaseFirstDelivery.Set();
 
-		CollectionAssert.Contains(results, 1);
-		CollectionAssert.DoesNotContain(results, 2);
-		await WaitFor(() => results.Last() == 3);
-		Assert.AreEqual(3, results.Last());
+		await WaitFor(() => { lock (results) { return results.Count == 2; } });
+		lock (results) { CollectionAssert.AreEqual(new[] { 1, 3 }, results); }
 		context.Dispose();
 	}
 

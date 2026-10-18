@@ -46,7 +46,7 @@ Console.WriteLine(store.State.GetFeatureState<CounterState>().Value); // always 
 
 The blocking wait is also what makes the store safe to use from UI frameworks: a Blazor event handler that dispatches and then re-reads state sees the new value, with no `InvokeAsync` dance or post-render timing games.
 
-**Re-entrancy:** if you call `Dispatch` from inside middleware or a reducer (i.e., on the processor thread), the store detects this and applies the action inline instead of waiting. This is safe — you're already the single thread — and it prevents middleware that dispatches follow-up actions from deadlocking.
+**Re-entrancy:** if you call `Dispatch` from inside middleware or a reducer (i.e., on the processor thread), the store detects this and queues the action *without waiting*. This is safe — you're the queue's only reader — and it prevents middleware that dispatches follow-up actions from deadlocking. Note that "without waiting" is not "applied immediately": the re-dispatched action runs after the current dispatch item finishes, so it follows the same per-dispatch contract and may settle after the original caller wakes up.
 
 ### What `Dispatch` does *not* wait for
 

@@ -130,7 +130,7 @@ State observables are infinite hot streams — `Last()` on one never returns unt
 
 ### Don't switch threads inside middleware
 
-Middleware runs on the processor thread. If you `await` inside an async middleware and resume on a different thread (the default), the re-entrancy guard no longer recognizes you as "in processing" — a `Dispatch` after the resume blocks a pool thread waiting for the processor instead of running inline.
+Middleware runs on the processor thread. If you `await` inside an async middleware and resume on a different thread (the default), the re-entrancy guard no longer recognizes you as "in processing" — a `Dispatch` after the resume blocks a pool thread waiting for the processor instead of taking the no-wait path.
 
 ```csharp
 // BAD — resumes on a pool thread, then dispatches as an outsider
@@ -142,7 +142,7 @@ ReduxMiddleware.Create(async (action, next) =>
 });
 ```
 
-This isn't a deadlock, but it wastes a thread and defeats the inline fast path. Middleware is a synchronous pipeline stage by contract. If you need async work, dispatch an action that starts a thunk.
+This isn't a deadlock, but it wastes a thread and defeats the no-wait fast path. Middleware is a synchronous pipeline stage by contract. If you need async work, dispatch an action that starts a thunk.
 
 ### Don't capture caller-thread state in reducers
 

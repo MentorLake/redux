@@ -107,7 +107,7 @@ public class MiddlewareTests
 	}
 
 	[TestMethod]
-	public void Middleware_CanDispatchAdditionalActions()
+	public async Task Middleware_CanDispatchAdditionalActions()
 	{
 		var store = CreateStore();
 		store.UseMiddleware(ReduxMiddleware.Create((action, next) =>
@@ -116,8 +116,15 @@ public class MiddlewareTests
 			if (action is MwIncrementAction { Amount: 1 }) store.Dispatch(new MwIncrementAction(10));
 		}));
 
+		var settled = new TaskCompletionSource();
+		using var sub = store
+			.Select(s => s.GetFeatureState<MwCounterState>().Value)
+			.Subscribe(v => { if (v == 11) settled.TrySetResult(); });
+
 		store.Dispatch(new MwIncrementAction(1));
 
+		var completed = await Task.WhenAny(settled.Task, Task.Delay(2000));
+		Assert.AreSame(settled.Task, completed, "Cascade did not settle within timeout.");
 		Assert.AreEqual(11, store.State.GetFeatureState<MwCounterState>().Value);
 	}
 }

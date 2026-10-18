@@ -91,7 +91,9 @@ public sealed partial class ReduxStore : IAsyncDisposable
 	/// </para>
 	/// <para>
 	/// Called from the processor thread (inside middleware or a reducer), the actions are
-	/// applied inline without waiting, which keeps re-entrant dispatch deadlock-free.
+	/// queued without waiting, which keeps re-entrant dispatch deadlock-free. Like any
+	/// consequential action, they settle on the processor's schedule — after the current
+	/// dispatch item completes — not before the outer call returns.
 	/// </para>
 	/// </remarks>
 	/// <exception cref="ObjectDisposedException">The store has been disposed.</exception>

@@ -135,7 +135,7 @@ public class ThunkReducerTests
 		var fulfilledTask = publishedThunkDispatch.OfType<ThunkFulfilled>().Take(1).ToTask();
 		publishedThunkDispatch.Connect();
 
-		Task.WaitAll([pendingTask, fulfilledTask], 1000);
+		Assert.IsTrue(Task.WaitAll([pendingTask, fulfilledTask], 1000), "Lifecycle actions did not arrive within timeout.");
 
 		Assert.IsTrue(workCompleted);
 		Assert.AreEqual("AsyncWork/pending", (await pendingTask).ActionName);

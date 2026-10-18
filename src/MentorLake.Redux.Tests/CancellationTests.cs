@@ -372,9 +372,7 @@ public class CancellationTests
 			if (a is CancelResultAction r) results.Add(r.Id);
 		});
 
-		store.Dispatch(new CancelTriggerAction(1));
-		await Task.Delay(30);
-		store.Dispatch(new CancelTriggerAction(2));
+		store.Dispatch(new CancelTriggerAction(1), new CancelTriggerAction(2));
 
 		await WaitUntil(() => results.Count == 1, 3000);
 		await Task.Delay(200);

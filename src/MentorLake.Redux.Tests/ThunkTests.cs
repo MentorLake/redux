@@ -60,7 +60,7 @@ public class ThunkTests
 		var pending = actions.OfType<ThunkPending>().Take(1).ToTask();
 		var fulfilled = actions.OfType<ThunkFulfilled>().Take(1).ToTask();
 		actions.Connect();
-		Task.WaitAll([pending, fulfilled], 1000);
+		Assert.IsTrue(Task.WaitAll([pending, fulfilled], 1000), "Lifecycle actions did not arrive within timeout.");
 
 		Assert.AreEqual("NamedJob/pending", pending.Result.ActionName);
 		Assert.AreEqual("NamedJob/fulfilled", fulfilled.Result.ActionName);
@@ -164,7 +164,7 @@ public class ThunkTests
 		var pending = actions.OfType<ThunkPending>().Take(1).ToTask();
 		var fulfilled = actions.OfType<ThunkFulfilled>().Take(1).ToTask();
 		actions.Connect();
-		Task.WaitAll([pending, fulfilled], 1000);
+		Assert.IsTrue(Task.WaitAll([pending, fulfilled], 1000), "Lifecycle actions did not arrive within timeout.");
 
 		Assert.IsTrue(ran);
 		Assert.AreEqual("/pending", pending.Result.ActionName);

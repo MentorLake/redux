@@ -346,7 +346,7 @@ public class StoreInfrastructureTests
 	}
 
 	[TestMethod]
-	public void ReentrantDispatch_FromMiddleware_IsAppliedInline()
+	public async Task ReentrantDispatch_FromMiddleware_QueuesWithoutDeadlock()
 	{
 		var store = CreateStore();
 		store.UseMiddleware(ReduxMiddleware.Create((action, next) =>
@@ -358,8 +358,15 @@ public class StoreInfrastructureTests
 			}
 		}));
 
+		var settled = new TaskCompletionSource();
+		using var sub = store
+			.Select(s => s.GetFeatureState<StoreInfraState>().Value)
+			.Subscribe(v => { if (v == 2) settled.TrySetResult(); });
+
 		store.Dispatch(new StoreInfraTick());
 
+		var completed = await Task.WhenAny(settled.Task, Task.Delay(2000));
+		Assert.AreSame(settled.Task, completed, "Re-entrant dispatch did not settle within timeout.");
 		Assert.AreEqual(2, store.State.GetFeatureState<StoreInfraState>().Value);
 	}
 
