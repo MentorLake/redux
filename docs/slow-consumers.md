@@ -151,22 +151,56 @@ store.Select(MySelectors.Metrics)
 - **Guarantees:** at most one emission in flight at a time; the newest value always wins; nothing is lost mid-race; errors and completion pass through; disposal stops emissions immediately.
 - **Cost:** like `Switch`, intermediate values are dropped — but unlike `Switch`, in-flight work is *never canceled*. The current emission runs to completion; only queued-but-unstarted values are collapsed.
 - **Scheduler choice matters:** `ThreadPoolScheduler.Instance` collapses a burst of dispatches into a few reports on pool threads; an `EventLoopScheduler` gives the same conflation with thread affinity. A synchronous/immediate scheduler degenerates to pass-through.
+- **SynchronizationContext overload:** `ConflateLatest(synchronizationContext)` posts deliveries to any `SynchronizationContext` (e.g. a Blazor `DispatcherSynchronizationContext`) instead of an `IScheduler`, with the same conflation guarantees.
 
 Pick it over `Sample` when there is no natural cadence — the consumer's own throughput *is* the cadence. Pick it over `Switch` when the work can't or shouldn't be canceled mid-flight (a synchronous send, a fire-and-forget log line).
 
+### If your handler throws
+
+A subscriber handler that throws is fatal to the subscription: Rx's `AutoDetachObserver` disposes the chain and rethrows the exception **on the delivery thread**, not back to the publisher. The source (e.g. the store's Subject) keeps working for other observers, but the `ConflateLatest` pipeline is silently gone.
+
+Where the rethrow lands depends on the dispatch target:
+
+- **`TaskPoolScheduler` / thread pool:** the exception disappears into the pool — the subscription dies quietly.
+- **`SynchronizationContext` (e.g. Blazor's `DispatcherSynchronizationContext`):** the rethrow happens on the context thread; Blazor's dispatcher catches and logs it.
+- **`EventLoopScheduler`:** the rethrow kills the scheduler's loop thread — in a real app that's an **unhandled exception and a process crash**.
+
+`ConflateLatest` never catches handler exceptions itself (swallowing would hide bugs), so if a throwing handler is plausible, guard it where it runs:
+
+```csharp
+store.Select(MySelectors.Metrics)
+    .ConflateLatest(scheduler)
+    .Subscribe(val =>
+    {
+        try { Report(val); }
+        catch (Exception ex) { logger.LogError(ex, "Report failed"); }
+    });
+```
+
+A `Catch` operator *after* `ConflateLatest` does **not** save the pipeline: by the time the exception unwinds through `Catch`, `AutoDetachObserver` has already disposed the upstream chain — `Catch` logs it and completes, but the source subscription is gone. The guard must be inside the handler (or inside a `Do` action) so nothing ever reaches the observer boundary.
+
 ### Always-current value, pull model: `BehaviorSubject`
 
-If the consumer shouldn't be notified at all — it just wants "whatever is current" whenever it's ready — keep the latest in a cell and let the consumer read it:
+Every other pattern in this document is push: something is *delivered*, and the strategy decides which values survive the trip. But the doc's opening question — "what should happen to updates while you're busy?" — has a fourth answer the push patterns can't give: **deliver nothing, keep only the current truth, and let the consumer read it when it's ready.**
+
+This is the right shape when the consumer runs on its *own* clock and a notification would be pure overhead: a render loop that repaints at frame rate anyway, a batch job that syncs every minute, a heartbeat that reports metrics on demand. For these, being told *that* the value changed is noise — you only ever want the value itself.
 
 ```csharp
 var latest = store.Select(MySelectors.Metrics)
     .Publish(new BehaviorSubject<Metrics>(Metrics.Empty));
-latest.Connect();
+var connection = latest.Connect();
 
-// consumer loop reads latest.Value on its own schedule
+// elsewhere, on the consumer's own schedule:
+void OnTimer() => Report(latest.Value);
 ```
 
-No events, no queue: the value is always fresh because it's overwritten in place.
+How it works: `Publish(subject)` multicasts the selector stream into the subject you supply, and `Connect()` subscribes that subject to the source once. A `BehaviorSubject` holds its newest value in a single field, overwritten in place on every update. Reads of `.Value` never touch the store and never block — the cell is just there.
+
+- **Guarantees:** the value is always fresh (a read can never observe a state the store has already left behind, because stale states are overwritten, not queued); zero delivery cost — sustained overload is free, no queue, no dropped-work bookkeeping, no memory growth; the initial value (`Metrics.Empty`) is readable immediately, before the store has ever pushed.
+- **Cost:** you lose *edges*. There is no notification, so a consumer can't react to "the value just changed" — only to "the value, as of now." If the value changes twice between two reads, the intermediate state is invisible (usually exactly what you want; fatal if the transition itself matters). There is also no synchronization between the read and anything you do with it: `latest.Value` is a snapshot, and it may be stale by the time you act on it — same as any lock-free read.
+- **Lifecycle:** `Connect()` returns an `IDisposable` and the source subscription stays alive until you dispose it — not when the last reader stops reading. In an app, tie the connection to the same lifetime as the readers (e.g. a component's `IDisposable`); a forgotten connection is a leak that quietly keeps a selector hot.
+
+Pick it over `ConflateLatest` when the consumer's cadence is *independent* of the store's. `ConflateLatest` still produces one delivery per free cycle — right for "react as soon as you're free." If the consumer would rather ask "what's true now?" on its own schedule and never be interrupted, the cell is strictly cheaper: no dispatch, no scheduler, no subscription callbacks at all.
 
 ## Notes and Pitfalls
 

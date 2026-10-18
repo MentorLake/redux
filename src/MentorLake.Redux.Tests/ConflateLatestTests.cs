@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Reactive.Concurrency;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
@@ -297,6 +298,172 @@ public class ConflateLatestTests
 
 		Assert.IsTrue(completed);
 		CollectionAssert.AreEqual(new[] { 1 }, results);
+	}
+
+	[TestMethod]
+	public async Task ConflateLatestWithSyncContextForwardsSingleValue()
+	{
+		var context = new QueuedSynchronizationContext();
+		var source = new Subject<int>();
+		var results = new List<int>();
+		using var sub = source.ConflateLatest(context).Subscribe(results.Add);
+
+		source.OnNext(1);
+		await WaitFor(() => results.Count == 1);
+
+		CollectionAssert.AreEqual(new[] { 1 }, results);
+		context.Dispose();
+	}
+
+	[TestMethod]
+	public async Task ConflateLatestWithSyncContextCollapsesBurstToLatest()
+	{
+		var context = new QueuedSynchronizationContext();
+		var source = new Subject<int>();
+		var results = new List<int>();
+		using var sub = source.ConflateLatest(context).Subscribe(results.Add);
+
+		source.OnNext(1);
+		source.OnNext(2);
+		source.OnNext(3);
+		await WaitFor(() => results.Count >= 1);
+
+		CollectionAssert.Contains(results, 1);
+		CollectionAssert.DoesNotContain(results, 2);
+		await WaitFor(() => results.Last() == 3);
+		Assert.AreEqual(3, results.Last());
+		context.Dispose();
+	}
+
+	[TestMethod]
+	public async Task ConflateLatestWithSyncContextDeliversOnContextThread()
+	{
+		var context = new QueuedSynchronizationContext();
+		var source = new Subject<int>();
+		var threads = new List<Thread>();
+		using var sub = source.ConflateLatest(context).Subscribe(_ => threads.Add(Thread.CurrentThread));
+
+		source.OnNext(1);
+		await WaitFor(() => threads.Count == 1);
+		source.OnNext(2);
+		await WaitFor(() => threads.Count == 2);
+
+		Assert.AreEqual(2, threads.Count);
+		Assert.AreSame(threads[0], threads[1]);
+		Assert.AreSame(context.ContextThread, threads[0]);
+		context.Dispose();
+	}
+
+	[TestMethod]
+	public async Task ConflateLatestWithSyncContextForwardsError()
+	{
+		var context = new QueuedSynchronizationContext();
+		var source = new Subject<int>();
+		var error = new TestException();
+		Exception caught = null;
+		using var sub = source.ConflateLatest(context).Subscribe(_ => { }, ex => caught = ex);
+
+		source.OnNext(1);
+		await Task.Delay(50);
+		source.OnError(error);
+		await WaitFor(() => caught != null);
+
+		Assert.AreSame(error, caught);
+		context.Dispose();
+	}
+
+	[TestMethod]
+	public async Task ConflateLatestWithSyncContextCompletesAfterPendingValue()
+	{
+		var context = new QueuedSynchronizationContext();
+		var source = new Subject<int>();
+		var results = new List<int>();
+		var completed = false;
+		using var sub = source.ConflateLatest(context).Subscribe(results.Add, () => completed = true);
+
+		source.OnNext(1);
+		source.OnNext(2);
+		source.OnCompleted();
+		await WaitFor(() => completed);
+
+		Assert.IsTrue(completed);
+		context.Dispose();
+	}
+
+	[TestMethod]
+	public async Task ConflateLatestWithSyncContextStopsEmittingAfterDispose()
+	{
+		var context = new QueuedSynchronizationContext();
+		var source = new Subject<int>();
+		var results = new List<int>();
+		var sub = source.ConflateLatest(context).Subscribe(results.Add);
+
+		source.OnNext(1);
+		await WaitFor(() => results.Count == 1);
+		sub.Dispose();
+		source.OnNext(2);
+
+		await Task.Delay(100);
+		CollectionAssert.AreEqual(new[] { 1 }, results);
+		context.Dispose();
+	}
+
+	[TestMethod]
+	public async Task ConflateLatestWithSyncContextNeverDeliversConcurrently()
+	{
+		var context = new QueuedSynchronizationContext();
+		var source = new Subject<int>();
+		var active = 0;
+		var overlap = false;
+		using var sub = source.ConflateLatest(context).Subscribe(_ =>
+		{
+			if (Interlocked.Increment(ref active) > 1) { overlap = true; }
+			Thread.Sleep(1);
+			Interlocked.Decrement(ref active);
+		});
+
+		var producers = Enumerable.Range(0, 4).Select(p => Task.Run(() =>
+		{
+			for (var i = 0; i < 100; i++) { source.OnNext(p * 100 + i); }
+		})).ToArray();
+
+		await Task.WhenAll(producers);
+		await WaitFor(() => Volatile.Read(ref active) == 0 && !overlap, 50);
+
+		Assert.IsFalse(overlap);
+		context.Dispose();
+	}
+
+	private sealed class QueuedSynchronizationContext : SynchronizationContext, IDisposable
+	{
+		private readonly BlockingCollection<(SendOrPostCallback Callback, object State)> queue = new();
+
+		public QueuedSynchronizationContext()
+		{
+			ContextThread = new Thread(() =>
+			{
+				foreach (var (callback, state) in queue.GetConsumingEnumerable())
+				{
+					callback(state);
+				}
+			})
+			{
+				IsBackground = true,
+				Name = "queued-sync-context"
+			};
+			ContextThread.Start();
+		}
+
+		public Thread ContextThread { get; }
+
+		public override void Post(SendOrPostCallback d, object state) => queue.Add((d, state));
+
+		public void Dispose()
+		{
+			queue.CompleteAdding();
+			ContextThread.Join(TimeSpan.FromSeconds(2));
+			queue.Dispose();
+		}
 	}
 
 	private static async Task WaitFor(Func<bool> condition, int timeoutMs = 2000)
