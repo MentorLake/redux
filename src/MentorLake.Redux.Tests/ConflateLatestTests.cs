@@ -93,6 +93,44 @@ public class ConflateLatestTests
 	}
 
 	[TestMethod]
+	public async Task ConflateLatestDeliversFinalValueFromTimerSource()
+	{
+		var scheduler = new EventLoopScheduler();
+		var results = new List<long>();
+		var completed = false;
+		using var sub = Observable.Timer(TimeSpan.FromMilliseconds(50))
+			.ConflateLatest(scheduler)
+			.Subscribe(results.Add, () => completed = true);
+
+		await WaitFor(() => completed);
+
+		Assert.IsTrue(completed);
+		CollectionAssert.AreEqual(new[] { 0L }, results);
+	}
+
+	[TestMethod]
+	public async Task ConflateLatestDeliversValueEmittedOnForeignThreadBeforeCompletion()
+	{
+		var scheduler = new EventLoopScheduler();
+		var source = new Subject<int>();
+		var results = new List<int>();
+		var completed = false;
+		using var sub = source.ConflateLatest(scheduler).Subscribe(results.Add, () => completed = true);
+
+		var emitter = new Thread(() =>
+		{
+			source.OnNext(42);
+			source.OnCompleted();
+		});
+		emitter.Start();
+		emitter.Join();
+		await WaitFor(() => completed);
+
+		Assert.IsTrue(completed);
+		CollectionAssert.AreEqual(new[] { 42 }, results);
+	}
+
+	[TestMethod]
 	public async Task ConflateLatestStopsEmittingAfterDispose()
 	{
 		var scheduler = new EventLoopScheduler();

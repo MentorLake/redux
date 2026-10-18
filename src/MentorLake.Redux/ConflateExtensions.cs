@@ -21,8 +21,8 @@ public static class ConflateExtensions
 	/// <param name="scheduler">Where deliveries run. <c>ThreadPoolScheduler</c> collapses
 	/// bursts onto the pool; an <c>EventLoopScheduler</c> adds thread affinity.</param>
 	/// <remarks>
-	/// Errors and completion pass through immediately; disposal stops pending emissions.
-	/// See docs/slow-consumers.md.
+	/// Errors pass through immediately; completion waits for the final value to be
+	/// delivered. Disposal stops pending emissions. See docs/slow-consumers.md.
 	/// </remarks>
 	public static IObservable<T> ConflateLatest<T>(this IObservable<T> source, IScheduler scheduler)
 	{
@@ -45,8 +45,8 @@ public static class ConflateExtensions
 	/// <c>DispatcherSynchronizationContext</c>. Deliveries are posted to the context, so
 	/// the source thread is never blocked and the context's own throughput is the cadence.</param>
 	/// <remarks>
-	/// Errors and completion pass through immediately; disposal stops pending emissions.
-	/// See docs/slow-consumers.md.
+	/// Errors pass through immediately; completion waits for the final value to be
+	/// delivered. Disposal stops pending emissions. See docs/slow-consumers.md.
 	/// </remarks>
 	public static IObservable<T> ConflateLatest<T>(this IObservable<T> source, SynchronizationContext synchronizationContext)
 	{
@@ -64,6 +64,7 @@ public static class ConflateExtensions
 			var hasValue = false;
 			var inFlight = false;
 			var disposed = false;
+			var sourceCompleted = false;
 			var latest = default(T)!;
 			var sourceSubscription = new SingleAssignmentDisposable();
 
@@ -72,7 +73,21 @@ public static class ConflateExtensions
 				T next;
 				lock (gate)
 				{
-					if (!hasValue || inFlight || disposed) { return; }
+					if (disposed) { return; }
+
+					if (!hasValue)
+					{
+						if (sourceCompleted && !inFlight)
+						{
+							disposed = true;
+							observer.OnCompleted();
+						}
+
+						return;
+					}
+
+					if (inFlight) { return; }
+
 					inFlight = true;
 					hasValue = false;
 					next = latest;
@@ -96,7 +111,7 @@ public static class ConflateExtensions
 			sourceSubscription.Disposable = source.Subscribe(
 				val => { lock (gate) { hasValue = true; latest = val; } Drain(); },
 				observer.OnError,
-				() => { lock (gate) { disposed = true; } Drain(); observer.OnCompleted(); });
+				() => { lock (gate) { sourceCompleted = true; } Drain(); });
 
 			return Disposable.Create(() =>
 			{
