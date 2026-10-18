@@ -12,12 +12,24 @@ public sealed partial class ReduxStore
 		[typeof(ThunkApi)] = static ctx => new(ctx)
 	};
 
+	/// <summary>
+	/// Registers the factory used to create a custom <see cref="ThunkApi"/> subtype,
+	/// enabling services (via constructor injection in the factory) for thunks dispatched
+	/// through <see cref="Using{TApi}"/>.
+	/// </summary>
+	/// <typeparam name="TApi">The custom thunk API type.</typeparam>
+	/// <param name="factory">Creates an API instance per thunk run from its context.</param>
 	public void RegisterThunkApiFactory<TApi>(Func<ThunkApiContext, TApi> factory) where TApi : ThunkApi
 	{
 		ArgumentNullException.ThrowIfNull(factory);
 		_thunkApiFactories[typeof(TApi)] = ctx => factory(ctx);
 	}
 
+	/// <summary>
+	/// Entry point for dispatching thunks against a specific <see cref="ThunkApi"/> type.
+	/// </summary>
+	/// <typeparam name="TApi">The API type; must have a registered factory (see
+	/// <see cref="RegisterThunkApiFactory{TApi}"/>).</typeparam>
 	public ThunkDispatcher<TApi> Using<TApi>() where TApi : ThunkApi
 	{
 		return new(this);
@@ -93,18 +105,53 @@ public sealed partial class ReduxStore
 		throw new InvalidOperationException($"No factory registered for {apiType.FullName}");
 	}
 
+	/// <summary>
+	/// Runs a thunk action, dispatching <c>pending</c>/<c>fulfilled</c>/<c>rejected</c>
+	/// lifecycle actions around it.
+	/// </summary>
+	/// <typeparam name="TApi">The thunk API type to run against.</typeparam>
+	/// <param name="thunk">The callable thunk (typically <c>SomeThunk.Bind(...)</c>).</param>
+	/// <param name="cancellationToken">Optional cancellation for the thunk run.</param>
+	/// <returns>
+	/// A <see cref="ThunkResult"/> exposing the lifecycle <see cref="Actions"/> stream and
+	/// <c>ToTask()</c> for awaiting completion. The thunk starts when the result is
+	/// subscribed or awaited.
+	/// </returns>
 	public ThunkResult DispatchThunk<TApi>(ICallableThunkAction<TApi> thunk, CancellationToken cancellationToken = default) where TApi : ThunkApi
 	{
 		var owned = CreateOwnedCancellation(cancellationToken, out var token);
 		return new(StartThunk(thunk, token, null, owned), owned);
 	}
 
+	/// <summary>
+	/// Runs a thunk function that produces a result, dispatching lifecycle actions around it.
+	/// </summary>
+	/// <typeparam name="TApi">The thunk API type to run against.</typeparam>
+	/// <typeparam name="TResult">The thunk's return type.</typeparam>
+	/// <param name="thunk">The callable thunk function (typically <c>SomeThunk.Bind(...)</c>).</param>
+	/// <param name="cancellationToken">Optional cancellation for the thunk run.</param>
+	/// <returns>
+	/// A <see cref="ThunkResult{TResult}"/> whose <c>ToTask()</c> yields the thunk's value
+	/// (or rethrows its exception). The thunk starts when the result is subscribed or awaited.
+	/// </returns>
 	public ThunkResult<TResult> DispatchThunk<TApi, TResult>(ICallableThunkFunc<TApi, TResult> thunk, CancellationToken cancellationToken = default) where TApi : ThunkApi
 	{
 		var owned = CreateOwnedCancellation(cancellationToken, out var token);
 		return new(StartThunk(thunk, token, null, owned), owned);
 	}
 
+	/// <summary>
+	/// Runs a thunk action in a cancellation group: starting a new thunk in the same group
+	/// cancels the previous one (search-as-you-type semantics).
+	/// </summary>
+	/// <typeparam name="TApi">The thunk API type to run against.</typeparam>
+	/// <param name="cancellationGroup">Group name; latest dispatch per group wins.</param>
+	/// <param name="thunk">The callable thunk (typically <c>SomeThunk.Bind(...)</c>).</param>
+	/// <param name="cancellationToken">Optional cancellation combined with the group's.</param>
+	/// <returns>
+	/// A <see cref="ThunkResult"/> exposing the lifecycle actions stream and <c>ToTask()</c>.
+	/// A superseded run observes cancellation; its rejection is suppressed from the group.
+	/// </returns>
 	public ThunkResult DispatchThunkLatest<TApi>(string cancellationGroup, ICallableThunkAction<TApi> thunk, CancellationToken cancellationToken = default) where TApi : ThunkApi
 	{
 		var group = GetOrCreateThunkGroup(cancellationGroup);
@@ -112,6 +159,19 @@ public sealed partial class ReduxStore
 		return new(StartThunk(thunk, cancellation.Token, group, cancellation), cancellation);
 	}
 
+	/// <summary>
+	/// Runs a thunk function in a cancellation group: starting a new thunk in the same group
+	/// cancels the previous one (search-as-you-type semantics).
+	/// </summary>
+	/// <typeparam name="TApi">The thunk API type to run against.</typeparam>
+	/// <typeparam name="TResult">The thunk's return type.</typeparam>
+	/// <param name="cancellationGroup">Group name; latest dispatch per group wins.</param>
+	/// <param name="thunk">The callable thunk function (typically <c>SomeThunk.Bind(...)</c>).</param>
+	/// <param name="cancellationToken">Optional cancellation combined with the group's.</param>
+	/// <returns>
+	/// A <see cref="ThunkResult{TResult}"/> whose <c>ToTask()</c> yields the thunk's value.
+	/// A superseded run observes cancellation; its rejection is suppressed from the group.
+	/// </returns>
 	public ThunkResult<TResult> DispatchThunkLatest<TApi, TResult>(string cancellationGroup, ICallableThunkFunc<TApi, TResult> thunk, CancellationToken cancellationToken = default) where TApi : ThunkApi
 	{
 		var group = GetOrCreateThunkGroup(cancellationGroup);

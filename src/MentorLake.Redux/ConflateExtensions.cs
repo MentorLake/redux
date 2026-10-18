@@ -4,8 +4,26 @@ using System.Reactive.Linq;
 
 namespace MentorLake.Redux;
 
+/// <summary>
+/// Rx operators for coalescing bursts of store updates.
+/// </summary>
 public static class ConflateExtensions
 {
+	/// <summary>
+	/// Delivers values on <paramref name="scheduler"/> with conflation: at most one
+	/// emission is in flight, and while it runs, new source values overwrite a single
+	/// pending slot — the newest value always wins and intermediate values are dropped.
+	/// Unlike <c>Switch</c>, in-flight work is never canceled; unlike <c>Sample</c>, no
+	/// clock is needed — the consumer's own throughput is the cadence.
+	/// </summary>
+	/// <typeparam name="T">The value type.</typeparam>
+	/// <param name="source">The source stream (e.g. a selector subscription).</param>
+	/// <param name="scheduler">Where deliveries run. <c>ThreadPoolScheduler</c> collapses
+	/// bursts onto the pool; an <c>EventLoopScheduler</c> adds thread affinity.</param>
+	/// <remarks>
+	/// Errors and completion pass through immediately; disposal stops pending emissions.
+	/// See docs/slow-consumers.md.
+	/// </remarks>
 	public static IObservable<T> ConflateLatest<T>(this IObservable<T> source, IScheduler scheduler)
 	{
 		ArgumentNullException.ThrowIfNull(source);

@@ -1,11 +1,35 @@
 
 namespace MentorLake.Redux.Selectors;
 
+/// <summary>
+/// Factory for selectors. Use <see cref="CreateFeature{TFinalResult}"/> for feature roots,
+/// <see cref="Create{TFinalResult}(Func{StoreState, TFinalResult}, IEqualityComparer{TFinalResult})"/>
+/// for ad-hoc projections, and the <c>Create(s1, ..., proj)</c> overloads (1–7 inputs) to
+/// compose memoized selectors from other selectors.
+/// </summary>
+/// <remarks>
+/// The <c>Create(s1, ..., proj)</c> overloads are generated from SelectorFactory.tt —
+/// edit the template, not the generated file. Each overload comes in four shapes: with and
+/// without previous-result access in the projector, and with an
+/// <see cref="IEqualityComparer{T}"/> or a comparison delegate.
+/// </remarks>
 public static class SelectorFactory
 {
+	/// <summary>
+	/// Root selector for a feature slice — the building block all derived selectors start from.
+	/// </summary>
+	/// <typeparam name="TFinalResult">The feature state type.</typeparam>
 	public static ISelector<TFinalResult> CreateFeature<TFinalResult>() where TFinalResult : class =>
 		new SimpleSelector<TFinalResult>(s => s.GetFeatureState<TFinalResult>());
 
+	/// <summary>
+	/// Ad-hoc projection straight from <see cref="StoreState"/>. Not memoized across
+	/// subscribers — prefer composing from <see cref="CreateFeature{TFinalResult}"/> roots
+	/// for shared evaluation.
+	/// </summary>
+	/// <typeparam name="TFinalResult">The projected value.</typeparam>
+	/// <param name="projectorFunction">Pure projection from whole state.</param>
+	/// <param name="equalityComparer">Change test for stream emission; defaults to the type's equality.</param>
 	public static ISelector<TFinalResult> Create<TFinalResult>(
 		Func<StoreState, TFinalResult> projectorFunction,
 		IEqualityComparer<TFinalResult> equalityComparer = null) =>

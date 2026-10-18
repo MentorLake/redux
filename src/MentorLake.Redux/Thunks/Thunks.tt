@@ -13,6 +13,12 @@ public string ActionName => actionName ?? string.Empty;
 """;
 #>
 
+/// <summary>
+/// A named async operation run by the store. Dispatching it emits
+/// <c>pending</c>/<c>fulfilled</c>/<c>rejected</c>/<c>cancelled</c> lifecycle actions that
+/// reducers and effects can handle by name. Define once, dispatch with <c>Bind()</c>.
+/// </summary>
+/// <typeparam name="TApi">The API type the thunk runs against.</typeparam>
 public readonly struct ThunkAction<TApi>(string actionName, Func<TApi, Task> work) where TApi : ThunkApi
 {
 	<#=sharedProperties#>
@@ -22,6 +28,13 @@ public readonly struct ThunkAction<TApi>(string actionName, Func<TApi, Task> wor
 	public static implicit operator ThunkAction<TApi>(Func<TApi, Task> work) => new(work);
 }
 
+/// <summary>
+/// A named async operation that produces a result. Lifecycle actions behave as for
+/// <see cref="ThunkAction{TApi}"/>; the fulfilled action carries the return value and
+/// <c>ToTask()</c> yields it.
+/// </summary>
+/// <typeparam name="TApi">The API type the thunk runs against.</typeparam>
+/// <typeparam name="TResult">The thunk's return type.</typeparam>
 public readonly struct ThunkFunc<TApi,TResult>(string actionName, Func<TApi, Task<TResult>> work) where TApi : ThunkApi
 {
 	<#=sharedProperties#>
@@ -31,6 +44,10 @@ public readonly struct ThunkFunc<TApi,TResult>(string actionName, Func<TApi, Tas
 	public static implicit operator ThunkFunc<TApi, TResult>(Func<TApi, Task<TResult>> work) => new(work);
 }
 
+/// <summary>
+/// A <see cref="ThunkAction{TApi}"/> bound for execution. Produced by <c>Bind()</c>;
+/// dispatch it via <c>store.DispatchThunk</c> or <c>store.Using&lt;TApi&gt;().DispatchThunk</c>.
+/// </summary>
 public readonly struct CallableThunkAction<TApi>(string actionName, Func<TApi, Task> work) : ICallableThunkAction<TApi> where TApi : ThunkApi
 {
 	public async Task ExecuteAsync(TApi api)
@@ -54,6 +71,9 @@ public readonly struct CallableThunkAction<TApi>(string actionName, Func<TApi, T
 	public static implicit operator CallableThunkAction<TApi>(Func<TApi, Task> work) => new(string.Empty, work);
 }
 
+/// <summary>
+/// A <see cref="ThunkFunc{TApi, TResult}"/> bound for execution. Produced by <c>Bind()</c>.
+/// </summary>
 public readonly struct CallableThunkFunc<TApi, TResult>(string actionName, Func<TApi, Task<TResult>> work) : ICallableThunkFunc<TApi, TResult> where TApi : ThunkApi
 {
 	public async Task ExecuteAsync(TApi api)
@@ -81,6 +101,10 @@ public readonly struct CallableThunkFunc<TApi, TResult>(string actionName, Func<
 	{
 #>
 
+/// <summary>
+/// A named async operation taking <#=i#> argument(s). Supply the arguments at
+/// <c>Bind(...)</c> time; lifecycle behavior matches <see cref="ThunkAction{TApi}"/>.
+/// </summary>
 public readonly struct ThunkAction<TApi, <#=Repeat(i, "TArg{i}")#>>(string actionName, Func<TApi, <#=Repeat(i, "TArg{i}")#>, Task> work) where TApi : ThunkApi
 {
 	<#=sharedProperties#>
@@ -89,6 +113,10 @@ public readonly struct ThunkAction<TApi, <#=Repeat(i, "TArg{i}")#>>(string actio
 	public static implicit operator ThunkAction<TApi, <#=Repeat(i, "TArg{i}")#>>(Func<TApi, <#=Repeat(i, "TArg{i}")#>, Task> work) => new(work);
 }
 
+/// <summary>
+/// A named async operation taking <#=i#> argument(s) and producing a result. Supply the
+/// arguments at <c>Bind(...)</c> time.
+/// </summary>
 public readonly struct ThunkFunc<TApi, <#=Repeat(i, "TArg{i}")#>, TResult>(string actionName, Func<TApi, <#=Repeat(i, "TArg{i}")#>, Task<TResult>> work) where TApi : ThunkApi
 {
 	<#=sharedProperties#>
@@ -97,6 +125,10 @@ public readonly struct ThunkFunc<TApi, <#=Repeat(i, "TArg{i}")#>, TResult>(strin
 	public static implicit operator ThunkFunc<TApi, <#=Repeat(i, "TArg{i}")#>, TResult>(Func<TApi, <#=Repeat(i, "TArg{i}")#>, Task<TResult>> work) => new(work);
 }
 
+/// <summary>
+/// A bound <see cref="ThunkAction{TApi}"/> with its arguments captured. Produced by
+/// <c>Bind(...)</c>.
+/// </summary>
 public readonly struct CallableThunkAction<TApi, <#=Repeat(i, "TArg{i}")#>>(string actionName, Func<TApi, <#=Repeat(i, "TArg{i}")#>, Task> work, <#=Repeat(i, "TArg{i} arg{i}")#>) : ICallableThunkAction<TApi> where TApi : ThunkApi
 {
 	public async Task ExecuteAsync(TApi api)
@@ -118,6 +150,10 @@ public readonly struct CallableThunkAction<TApi, <#=Repeat(i, "TArg{i}")#>>(stri
 	}
 }
 
+/// <summary>
+/// A bound <see cref="ThunkFunc{TApi, TResult}"/> with its arguments captured. Produced by
+/// <c>Bind(...)</c>.
+/// </summary>
 public readonly struct CallableThunkFunc<TApi, <#=Repeat(i, "TArg{i}")#>, TResult>(string actionName, Func<TApi, <#=Repeat(i, "TArg{i}")#>, Task<TResult>> work, <#=Repeat(i, "TArg{i} arg{i}")#>) : ICallableThunkFunc<TApi, TResult> where TApi : ThunkApi
 {
 	public async Task ExecuteAsync(TApi api)
