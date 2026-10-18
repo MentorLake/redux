@@ -23,14 +23,15 @@ Action  →  Reducer  →  New State  →  Subscribers notified
 
 | Feature | What it gives you |
 |---------|-------------------|
-| **Store** | Immutable state container with synchronous dispatch and observable state |
+| **Store** | Immutable state container with thread-safe dispatch serialized on a single processor thread |
 | **Feature reducers** | Fluent, type-safe reducers per state slice with `FeatureReducer.Build(...).On<TAction>(...)` |
 | **Memoized selectors** | Composable selectors (up to 7 inputs) that only recompute when inputs change, with custom comparers |
 | **Middleware** | Intercept, rewrite, guard, or short-circuit every dispatch before it reaches reducers |
-| **Batching** | `store.Dispatch(a1, a2, ...)` coalesces multiple actions into a single state notification |
+| **Batching** | `store.Dispatch(a1, a2, ...)` applies multiple actions as one atomic queue item with a single state notification |
 | **Effects** | Rx pipelines that react to dispatched actions — API calls, logging, navigation — decoupled from reducers |
 | **Thunks** | Async work units with named lifecycle actions, results, nesting, and dependency injection via custom `ThunkApi` |
 | **Cancellation** | Cancellable thunks with cancellation groups (take-latest) and declarative effect strategies (`TakeLatest`, `TakeEvery`, `Exhaust`, debounce/throttle) |
+| **ConflateLatest** | Thread-safe conflation operator for slow consumers — newest value wins, at most one delivery in flight, with `IScheduler` and `SynchronizationContext` overloads |
 | **DataTable** | Immutable normalized entity collection (`ById` + `AllIds`) for list/entity state |
 | **Assembly registration** | Auto-discover and register reducers and effects from an assembly |
 | **DI friendly** | Works with `Microsoft.Extensions.DependencyInjection` out of the box |
@@ -69,13 +70,21 @@ public class MyReducers : IReducerFactory
 var store = new ReduxStore();
 store.RegisterReducers(new MyReducers());
 
-// 5. Dispatch actions — reducers run synchronously
+// 5. Dispatch actions — safe from any thread. When Dispatch returns,
+//    reducers have run and state notifications have fired.
 store.Dispatch(new UpdateFirstNameAction("Bob"));
 
 // 6. Observe state reactively
 store.Select(s => s.GetFeatureState<PersonState>())
     .Subscribe(person => Console.WriteLine(person.FirstName)); // prints "Bob"
 ```
+
+> **Threading in one paragraph:** the store serializes all dispatches through a
+> single processor thread, so concurrent `Dispatch` calls from any thread are safe
+> and nothing is lost. Subscribers run on that processor thread — if a handler is
+> slow (rendering, I/O), hand off with `ConflateLatest(scheduler)` or `ObserveOn`
+> instead of blocking it. See [Threading](docs/threading.md) and
+> [Slow Consumers](docs/slow-consumers.md).
 
 ## Documentation
 
@@ -86,8 +95,8 @@ store.Select(s => s.GetFeatureState<PersonState>())
 | [Middleware](docs/middleware.md) | Intercepting, rewriting, and guarding dispatches before reducers |
 | [Batching](docs/batching.md) | Coalescing multiple dispatches into one state notification |
 | [Threading](docs/threading.md) | The single-threaded core, thread-safe dispatch, and the dispatch contract |
-| [Best Practices](docs/best-practices.md) | Do's and don'ts: middleware, subscribers, `ObserveOn`, async work |
-| [Slow Consumers](docs/slow-consumers.md) | Backpressure patterns: `Concat`, `Switch`, `Sample` |
+| [Best Practices](docs/best-practices.md) | Do's and don'ts: middleware, subscribers, thread hand-off, async work |
+| [Slow Consumers](docs/slow-consumers.md) | Backpressure patterns: `Concat`, `Switch`, `Sample`, `ConflateLatest` |
 | [Error Handling](docs/error-handling.md) | Dispatch failures, the `Errors` stream, and batch failure semantics |
 | [Reducers](docs/reducers.md) | Feature reducers, action handlers, factories, and immutability patterns |
 | [Selectors](docs/selectors.md) | Memoized, composable selectors and reactive state queries |
