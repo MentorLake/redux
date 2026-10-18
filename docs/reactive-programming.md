@@ -7,6 +7,7 @@ MentorLake.Redux is built on [System.Reactive](https://github.com/dotnet/reactiv
 - [Hot Streams and Subscriptions](#hot-streams-and-subscriptions)
 - [DistinctUntilChanged: The Library's Core Guarantee](#distinctuntilchanged-the-librarys-core-guarantee)
 - [The Operators You Actually Need](#the-operators-you-actually-need)
+- [PerKey: Bridging the Rx/Redux Lifecycle Gap](#perkey-bridging-the-rxredux-lifecycle-gap)
 - [Bridging Tasks and Observables](#bridging-tasks-and-observables)
 - [Disposal](#disposal)
 - [Threading](#threading)
@@ -41,6 +42,7 @@ Key ideas:
 | `ISelector<T>.Apply(IObservable<StoreState>)` | `IObservable<T>` | A selector lifted over a state stream |
 | `Effect` | `IObservable<object> → IObservable<object>` | A pipeline from the action stream to side effects/actions |
 | `ThunkResult.Actions` | `IObservable<object>` | All actions from one thunk run, completing at fulfilled/rejected |
+| `IObservable<IEnumerable<T>>.PerKey(...)` | `IObservable<IGroupedObservable<T, (T, int)>>` | One live stream per key, closed when the key disappears |
 
 The store itself uses a `BehaviorSubject` for state (emits the latest state to each new subscriber) and a `Subject` for actions (emits only to subscribers at dispatch time).
 
@@ -129,6 +131,20 @@ actions.OfType<StartAction>().Select(_ => Observable.Interval(TimeSpan.FromSecon
 ```csharp
 actions.WithLatestFrom(store.Select(CartSelector), (a, cart) => (a, cart))
 ```
+
+## PerKey: Bridging the Rx/Redux Lifecycle Gap
+
+Redux thinks in snapshots (the state *is*; absence from a `DataTable` means deletion). Rx thinks in events (absence means nothing). That's why `GroupBy`'s groups never close — the operator can't know a key's absence from the latest snapshot means it's gone.
+
+`PerKey` fills the gap: one live stream per item, created when it appears, updated when it changes, closed when it disappears.
+
+```csharp
+store.Select(ItemsTableSelector)
+     .PerKey(i => i.Id)
+     .Subscribe(group => group.Subscribe(item => RenderItem(group.Key, item)));
+```
+
+Full guide, including the `GroupBy` comparison and rules of use: [Per-Key Streams](per-key-streams.md).
 
 ## Bridging Tasks and Observables
 

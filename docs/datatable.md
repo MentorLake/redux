@@ -175,3 +175,8 @@ var stableUsers = UsersSelectors.AllUsers.WithSequenceComparer((a, b) => a.Equal
 
 - [Reducers](reducers.md) — updating tables from actions
 - [Selectors](selectors.md) — deriving views from tables
+
+## See Also
+
+- [Per-Key Streams](per-key-streams.md) — turn a table stream into one live stream per entity, closed on removal
+- [Selectors](selectors.md) — memoized projections over tables

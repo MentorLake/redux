@@ -197,4 +197,5 @@ var fullName = MySelectors.FullName.Apply(store.State);
 - [Threading](threading.md) — why selector handlers run on the processor thread
 - [Slow Consumers](slow-consumers.md) — handling selector updates faster than you can process them
 - [DataTable](datatable.md) — normalized data that pairs well with selectors
+- [Reactive Programming](reactive-programming.md) — `PerKey` for per-item streams from keyed collections
 - [Testing](testing.md) — asserting memoization behavior

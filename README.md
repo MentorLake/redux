@@ -33,6 +33,7 @@ Action  →  Reducer  →  New State  →  Subscribers notified
 | **Cancellation** | Cancellable thunks with cancellation groups (take-latest) and declarative effect strategies (`TakeLatest`, `TakeEvery`, `Exhaust`, debounce/throttle) |
 | **ConflateLatest** | Thread-safe conflation operator for slow consumers — newest value wins, at most one delivery in flight, with `IScheduler` and `SynchronizationContext` overloads |
 | **DataTable** | Immutable normalized entity collection (`ById` + `AllIds`) for list/entity state |
+| **PerKey** | One live stream per collection item — created when it appears, updated when it changes, closed when it disappears. The Rx/Redux lifecycle bridge `GroupBy` can't offer |
 | **Assembly registration** | Auto-discover and register reducers and effects from an assembly |
 | **DI friendly** | Works with `Microsoft.Extensions.DependencyInjection` out of the box |
 
@@ -105,6 +106,7 @@ store.Select(s => s.GetFeatureState<PersonState>())
 | [Cancellation](docs/cancellation.md) | Cancellable thunks, cancellation groups, and effect strategies |
 | [Custom Thunk API](docs/custom-thunk-api.md) | Injecting services into thunks with `ThunkApi` subclasses |
 | [DataTable](docs/datatable.md) | Normalized, immutable entity collections |
+| [Per-Key Streams](docs/per-key-streams.md) | `PerKey`: live per-item streams with automatic lifecycle — the Rx/Redux gap `GroupBy` can't fill |
 | [Reactive Programming](docs/reactive-programming.md) | How Rx is used throughout the library |
 | [Testing](docs/testing.md) | Unit testing reducers, selectors, thunks, and effects |
 | [Blazor View Models](docs/blazor-viewmodels.md) | Component pattern: select, `TakeUntil`, subscribe, dispose |
